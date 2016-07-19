@@ -1,5 +1,5 @@
 ---
-title: (IN PROGRESS) Snap Development Documentation
+title: Snap Development Documentation
 
 language_tabs:
 
@@ -13,8 +13,6 @@ search: true
 ---
 
 # Introduction
-
-UNFINISHED - DOCUMENTATION STILL IN PROGRESS!!!!
 
 This documentation guides a developer through the steps necessary to develop **Snaps** for the [SnapLogic Elastic Integration Platform](https://www.snaplogic.com/).
 
@@ -236,7 +234,7 @@ At its most basic, a Snap class declares the required name, view, version and ca
 
 ### Metadata annotations
 
-* `@General`: name, description, author, and documentation link for the snap.
+* `@General`: name, description, author, and documentation link for the Snap.
 * `@Inputs`: specifies the minimum and maximum number of Input Views and the type of input they accept (JSON Documents or Binary data).
 * `@Outputs`: specifies the minimum and maximum number of Output Views and the type of output they produce (JSON Documents or Binary data).
 * `@Errors`: specifies whether an Error Views should be written to
@@ -245,7 +243,7 @@ At its most basic, a Snap class declares the required name, view, version and ca
 
 ### Snap interface
 
-The `com.snaplogic.api.Snap` interface that should be implemented by the snap developers to convert their business logic into entity that can be used inside SnapLogic Pipelines.
+The `com.snaplogic.api.Snap` interface that should be implemented by the Snap developers to convert their business logic into entity that can be used inside SnapLogic Pipelines.
  
 **`defineProperties`**
 
@@ -265,6 +263,8 @@ Cleans up any suitable resources after the Snap execution. Again, should an erro
 
 <aside class="notice">
 Both <code>ConfigurationException</code> and <code>ExecutionException</code> are implementations of the root <code>SnapException</code> interface.
+
+See the <a href="#exceptions-and-error-views">Exceptions and Error Views</a> section for more information.
 </aside>
 
 # Getting Started
@@ -419,7 +419,7 @@ Files and folders within these directories will be on the test classpath, as per
 
 ### `pom.xml`
 
-This is the Maven POM file. You will change this file when registering new Snaps, when new dependencies or plugins are required, or when needing to modify the build properties.
+This is the Maven POM file. You will change this file when registering new Snaps and Accounts, when new dependencies or plugins are required, or when needing to modify the build properties.
 
 # Developing Snaps
 
@@ -457,16 +457,16 @@ The [Snap Maven Archetype](#snap-maven-archetype) ships with sample Snaps that w
 // Also, use the "docLink" parameter to set a link to the documentation
 @General(title = "Single Doc Generator", purpose = "Generates one document and completes",
         author = "Your Company Name", docLink = "http://yourdocslinkhere.com")
-// There is no input view for this snap
+// There is no input view for this Snap
 @Inputs(min = 0, max = 0)
-// This snap has exactly one document output view
+// This Snap has exactly one document output view
 // Snaps can also have binary output i.e., offers={ViewType.BINARY}
 @Outputs(min = 1, max = 1, offers = {ViewType.DOCUMENT})
-// This snap has an optional document error view
+// This Snap has an optional document error view
 @Errors(min = 0, max = 1, offers = {ViewType.DOCUMENT})
-// Version number of the snap
+// Version number of the Snap
 @Version(snap = 1)
-// This snap belongs to SnapCategory.READ as is does not require input.
+// This Snap belongs to SnapCategory.READ as is does not require input.
 @Category(snap = SnapCategory.READ)
 public class SingleDocGenerator implements Snap {
     private static final Logger log = LoggerFactory.getLogger(SingleDocGenerator.class);
@@ -493,8 +493,8 @@ public class SingleDocGenerator implements Snap {
         log.debug("counter=" + counter);
 
         /*
-         * Write a single document to outputView. The next snap in the pipe will
-         * only ever see a single document from this snap.
+         * Write a single document to outputView. The next Snap in the pipe will
+         * only ever see a single document from this Snap.
          */
         Map<String, String> data = new LinkedHashMap<String, String>() {{
             put("key", "value");
@@ -517,7 +517,7 @@ It is an uncomplicated Snap that generates a single document, without requiring 
 [Snap Anatomy 101](#snap-anatomy-101) explains the purpose of each annotation and the overridden methods. The comments above each annotation describe their specific usage for this Snap.
 
 <aside class="notice">
-For simplicity, the "Single Doc Generator" Snap does not permit any input views. However, for general Snap development, there should almost always be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
+For simplicity, the "Single Doc Generator" Snap does not permit any input views. However, for general Snap development, there should **almost always** be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
 </aside>
 
 ### Snap Lifecycle
@@ -600,17 +600,17 @@ Guice's `@Inject` annotation will instruct the Snaplex/JCC to inject an instance
 Documents may be created with given data. 
 
 <aside class="success">
-Data should be created either as a single `LinkedHashMap` instance (to preserve field ordering) or a `List` of `LinkedHashMap` instances. Avoid data being just a primitive data type or `null`.
+Data should be created either as a single <code>LinkedHashMap</code> instance (to preserve field ordering) or a <code>List</code> of <code>LinkedHashMap</code> instances. Avoid data being just a primitive data type or <code>null</code>.
 </aside>
 
 ### Lineage
 
 For Snaps that have input views and process documents, you should preserve [data lineage](https://en.wikipedia.org/wiki/Data_lineage) (required by [Ultra Pipelines](https://www.snaplogic.com/ultra-pipelines)) between the new output document to be written and the incoming original document by using one of the highlighted `DocumentUtility` methods:
 
-*Establishes lineage between the new document and the incoming original document, but discards the incoming data*<br />
+*Establishes lineage between the new document and the incoming original document, but discards the incoming data:*<br />
 `Document newDocumentWithLineage = documentUtility.newDocumentFor(originalDocument, data);`
 
-*Establishes lineage between the new document and the incoming original document and "passes through" the incoming document's data by adding a key named "original" (containing the incoming original document's data) to the new document*<br />
+*Establishes lineage between the new document and the incoming original document and "passes through" the incoming document's data by adding a key named "original" (containing the incoming original document's data) to the new document:*<br />
 `Document seed = documentUtility.newDocument(newData);`<br />
 `Document newDocumentWithLineage = documentUtility.newDocument(seed, originalDocument);`
 
@@ -783,7 +783,90 @@ Snap Category | Description
 **TRANSFORM** | Modify data significantly.<br />*Example: Aggregate, Join*
 **FLOW** | Change the direction or output of data in the pipeline.<br />*Example: Filter, Router*
 
-For custom Snaps you develop, choose the appropriate Snap Category for your use cases.
+As you develop Snaps, choose the appropriate Snap Category for your use cases.
+
+## Bootstrapping with SimpleSnap
+
+```java
+/**
+ * This Snap accepts two inputs and outputs to a single output. To use it, feed
+ * it at least one document in each view. It will output a single stream which consists
+ * of the combination of the two inputs.
+ *
+ * @author <you>
+ */
+@General(title = "Two Inputs", purpose = "Accepts two inputs, merges them",
+        author = "Your Company Name" docLink = "http://yourdocslinkhere.com")
+@Inputs(min = 2, max = 2)
+@Outputs(min = 1, max = 1, offers = {ViewType.DOCUMENT})
+@Errors(min = 0, max = 1, offers = {ViewType.DOCUMENT})
+@Version(snap = 1)
+@Category(snap = SnapCategory.READ)
+/*
+ * This Snap extends {@link SimpleSnap} (instead of implementing {@link Snap}).
+ * This means that instead of having a method called 'execute' which is called once,
+ * it has a method called 'process' which is called for every document the Snap receives.
+ * This means you do not have to iterate over incoming documents as 'process' does that
+ * for you.
+ */
+public class TwoInputs extends SimpleSnap {
+
+    private static final Logger log = LoggerFactory.getLogger(TwoInputs.class);
+    private int count = 0;
+    @Inject
+    private OutputViews outputViews;
+
+    @Override
+    public void defineProperties(PropertyBuilder propertyBuilder) {
+    }
+
+    @Override
+    public void configure(PropertyValues propertyValues)
+            throws ConfigurationException {
+    }
+
+    @Override
+    public void process(Document document, String inputViewName) {
+        // Demonstrates how to create a new copy of the document
+        Document newdoc = document.copy();
+
+        // get a map representation of the document
+        // NOTE: we are *not* duplicating the data.
+        // We will *not* have to convert the map back to a doc.
+        // It's just a pointer representation.
+        Map<String, Object> data = newdoc.get(Map.class);
+
+        // assign a value to a field of the map
+        // In this case, we are just assigning 'processed=True'
+        // to signal that the document has been processed.
+        data.put("processed", "True");
+
+        count++;
+        // log current document number
+        log.debug("count=" + count);
+
+        // log current document
+        log.debug("document: " + newdoc.toString());
+
+        // send new document to next Snap
+        outputViews.write(newdoc, document);
+    }
+
+    @Override
+    public void cleanup() throws ExecutionException {
+        // Log final number of documents processed
+        log.debug("Final count=" + count);
+    }
+}
+```
+
+Now that we understand the basics of a Snap, we can extend the `SimpleSnap` class to have some of the heavy lifting done for us.
+
+`SimpleSnap` provides all the necessary hooks for writing a new Snap. A Snap author can write a new Snap by simply extending `SimpleSnap`, adding the desired metadata annotations (`SimpleSnap` already declares an `@Errors` view that can be overridden), and providing the implementation for the `process` method (and optionally, for the `defineProperties` and `configure` methods too).
+
+`SimpleSnap` takes care of iterating over the incoming documents (if any) and allowing you to process each document at a time. It also handles the dependency injection for the `Input/Output/ErrorViews`, the `DocumentUtility`, and the `ExecutionUtil` (which handles iterating over the documents in the incoming input view(s) on your behalf, and writing any thrown `SnapDataException` instances to the error view).
+
+![Two Inputs](https://dl.dropboxusercontent.com/u/3519578/Screenshots/IVTO.png)
 
 ## Accepting User Input with PropertyBuilder
 
@@ -870,8 +953,8 @@ public class DocGenerator implements Snap {
     private DocumentUtility documentUtility;
     @Inject
     private OutputViews outputViews;
-
-    private ExpressionProperty countValueExp;
+    
+	private final ;
 
     @Override
     public void defineProperties(PropertyBuilder propertyBuilder) {
@@ -881,15 +964,16 @@ public class DocGenerator implements Snap {
 
     @Override
     public void configure(PropertyValues propertyValues) throws ConfigurationException {
-        countValueExp = propertyValues.getAsExpression(COUNT);
+        ExpressionProperty countValueExp = propertyValues.getAsExpression(COUNT);
+
+    	// evaluate the expression directly (without the context of a Document)
+		BigInteger countValue = countValueExp.eval(NO_DOCUMENT);
+		
+		count = countValue.intValue();
     }
 
     @Override
     public void execute() throws ExecutionException {
-    	// evaluate the expression directly (without the context of a Document)
-        final BigInteger countValue = countValueExp.eval(NO_DOCUMENT);
-        int count = countValue.intValue();
-        
         for (int i = 0; i < count; i++) {
             Map<String, String> data = new LinkedHashMap<>();
             data.put("key", "value" + (i + 1));
@@ -907,9 +991,9 @@ Snaplogic's [Expression Language](http://doc.snaplogic.com/expression-language) 
 
 Comparing to the [previous implementation](#accepting-user-input-with-propertybuilder) of `DocGenerator`, we can see that `.expression()` has been added to the `propertyBuilder()`. 
 
-The `configure` method's `BigInteger countValue` local variable has been replaced by the `ExpressionProperty countValueExp` instance variable, which is retrieved from the `PropertyValues` with the `getAsExpression` method, passing the field name "count" in.
+The `configure` method's `BigInteger countValue` local variable has been replaced by the `ExpressionProperty countValueExp` local variable, which is retrieved from the `PropertyValues` with the `getAsExpression` method, passing the field name "count" in. The `countValueExp` expression property is evaluated against `null` (as there is no incoming document to evaluate against e.g. when referencing a key in the incoming document), so the expression is evaluated directly. Since a number value was evaluated, we assign it to a local variable of type `BigInteger`, and then get its `intValue()`.
 
-Within `execute()`, the `countValueExp` expression property is evaluated against `null` (as there is no incoming document to evaluate against e.g. when referencing a key in the incoming document), so the expression is evaluated directly. Since a number value was evaluated, we assign it to a local variable of type `BigInteger`.
+Within `execute()`, we can then use the `count` in the loop.
 
 To demonstrate this new capability, we can use a "count" [Pipeline Property](http://doc.snaplogic.com/pipeline-properties) and then reference this in the Snap within a `parseInt` expression function:
 
@@ -919,12 +1003,12 @@ To demonstrate this new capability, we can use a "count" [Pipeline Property](htt
 
 TK
 
-## Suggesting Values
+## Suggesting Property Values
 
 ```java
 /**
  * This Snap has one output and writes one document that contains the suggested
- * value. This snap demonstrates the suggest value functionality that uses the
+ * value. This Snap demonstrates the suggest value functionality that uses the
  * partial configuration information to suggest a property value.
  *
  * @author <you>
@@ -982,90 +1066,61 @@ public class Suggest implements Snap {
 }
 ```
 
-TK
+A Snap can make "suggestions" to the user about property values. This is useful to lookup appropriate values using either another data source or the input value of a different property.
 
-## Processing Documents with SimpleSnap
+In the "Suggest" sample Snap, the user enters in a value for the "name" property. The "echo" property's suggest action then reads that value and allows the user to select it.
 
-```java
-/**
- * This Snap accepts two inputs and outputs to a single output. To use it, feed
- * it at least one document in each view. It will output a single stream which consists
- * of the combination of the two inputs.
- *
- * @author <you>
- */
-@General(title = "Two Inputs", purpose = "Accepts two inputs, merges them",
-        author = "Your Company Name" docLink = "http://yourdocslinkhere.com")
-@Inputs(min = 2, max = 2)
-@Outputs(min = 1, max = 1, offers = {ViewType.DOCUMENT})
-@Errors(min = 0, max = 1, offers = {ViewType.DOCUMENT})
-@Version(snap = 1)
-@Category(snap = SnapCategory.READ)
-/*
- * This Snap extends {@link SimpleSnap} (instead of implementing {@link Snap}).
- * This means that instead of having a method called 'execute' which is called once,
- * it has a method called 'process' which is called for every document the snap receives.
- * This means you do not have to iterate over incoming documents as 'process' does that
- * for you.
- */
-public class TwoInputs extends SimpleSnap {
+![Suggest](https://dl.dropboxusercontent.com/u/3519578/Screenshots/e2S6.png)
 
-    private static final Logger log = LoggerFactory.getLogger(TwoInputs.class);
-    private int count = 0;
-    @Inject
-    private OutputViews outputViews;
+The suggest capability is enabled through use of the the `PropertyBuilder.withSuggestions(Suggestions suggestions)` method. Implementations of the `Suggestions` interface should be provided to it.
 
-    @Override
-    public void defineProperties(PropertyBuilder propertyBuilder) {
-    }
+<aside class="notice">
+Notice that the UI also added the <strong>"="</strong> expression toggle button - suggestible properties <a href="#expression-enabled-properties">should always be expression-enabled too</a>. 
 
-    @Override
-    public void configure(PropertyValues propertyValues)
-            throws ConfigurationException {
-    }
+This was not done in the <code>Suggest</code> example above. The work required to support expressions for the field is left as an exercise to the reader.
+</aside>
 
-    @Override
-    public void process(Document document, String inputViewName) {
-        // Demonstrates how to create a new copy of the document
-        Document newdoc = document.copy();
+The `Suggestions` instance (often an anonymous instance) implements the single `suggest` method. It provides, as method arguments, references to the `SuggestionBuilder` and the `PropertyValues`. 
 
-        // get a map representation of the document
-        // NOTE: we are *not* duplicating the data.
-        // We will *not* have to convert the map back to a doc.
-        // It's just a pointer representation.
-        Map<String, Object> data = newdoc.get(Map.class);
+Using the `SuggestionBuilder` instance, we can configure simple String varargs for `suggestions()` for a selected `node()` that will result in a list of suggested values.
 
-        // assign a value to a field of the map
-        // In this case, we are just assigning 'processed=True'
-        // to signal that the document has been processed.
-        data.put("processed", "True");
+<aside class="success">
+Alternatively, use <code>objectSuggestions()</code> to add a list of values, with each entry representing a suggestion. The entry must be a map which provides a <strong>"label"</strong> key.
 
-        count++;
-        // log current document number
-        log.debug("count=" + count);
+The label will be displayed by the UI as the selectable entry, the rest of the object definition will be hidden.
+</aside>
 
-        // log current document
-        log.debug("document: " + newdoc.toString());
+### Suggestions within Tables and Composites
 
-        // send new document to next snap
-        outputViews.write(newdoc, document);
-    }
+To add suggestions to a Table element property, select the table node and use the `over()` builder method:
 
-    @Override
-    public void cleanup() throws ExecutionException {
-        // Log final number of documents processed
-        log.debug("Final count=" + count);
-    }
-}
-```
+<div class="inline-code">
+SnapProperty echo = propertyBuilder.describe(PROP_ECHO, PROP_ECHO)
+	.type(SnapType.STRING)
+	.withSuggestions(new Suggestions() {
+		@Override
+		public void suggest(SuggestionBuilder suggestionBuilder, 
+				PropertyValues propertyValues) {
+			suggestionBuilder
+				.node("table")
+				.over("echo")
+				.suggestions("X", "Y");
+		}
+	}).build();
 
-`SimpleSnap` provides all the necessary hooks for writing a new Snap. A Snap author can write a new Snap by simply extending `SimpleSnap` and providing the implementation for the `defineProperties`, `configure` and `process` methods. 
+propertyBuilder.describe("table", "table")
+	.type(SnapType.TABLE)
+	.withEntry(echo)
+	.add();
+</div>
 
-`SimpleSnap` takes care of iterating over the incoming documents (if any) and allowing you to process each document at a time.
+![Table Suggest](http://dl.dropboxusercontent.com/u/3519578/Screenshots/NlQw.png)
 
-![Two Inputs](https://dl.dropboxusercontent.com/u/3519578/Screenshots/IVTO.png)
+<aside class="warning">
+Suggestions are not supported within Composite properties.
+</aside>
 
-## Validating Data with Input/Output Schemas
+## Input/Output View Schemas
 
 ```java
 /**
@@ -1126,7 +1181,7 @@ public class SchemaExample extends SimpleSnap implements InputSchemaProvider,
     protected void process(Document document, final String inputViewName) {
         // Validate incoming data against the schema
         validate(document);
-        // Pass the document to the downstream snap in the pipeline.
+        // Pass the document to the downstream Snap in the pipeline.
         outputViews.write(document);
     }
 
@@ -1145,26 +1200,330 @@ public class SchemaExample extends SimpleSnap implements InputSchemaProvider,
 }
 ```
 
-TK
+Snap View Schemas allow Snaps to declare the structure of the data they are expecting to consume and/or generate. 
+
+When understanding how to use a Schema, you must first understand how declaring an input or output schema affects the Snaps in the pipeline immediately preceding and following, respectively.
+
+A Snap's input view schema becomes the Target Schema of the Snap (e.g. Mapper) immediately preceding it in the pipeline. This allows the user the opportunity to shape the data to the desired form:
+
+![Input Schema](http://dl.dropboxusercontent.com/u/3519578/Screenshots/M3WA.png)
+
+In the `SchemaExample` sample (which creates the **"View Schema"** Snap), an input schema is declared by implementing the `InputSchemaProvider` interface. This interface has a `defineInputSchema` method, where the `SchemaProvider` argument can be used to create child schemas and add them to the provider through a `SchemaBuilder`.
+
+Similarly the Snap's output view schema becomes the Input Schema of the Snap immediately following it in the pipeline, allowing users to anticipate the shape of the data exiting the Snap:
+
+![Output Schema](http://dl.dropboxusercontent.com/u/3519578/Screenshots/gqxF.png)
+
+### Enforcing a Schema
+
+Defining the schema as above will aid users in understanding what should be the structure of the data entering and exiting the Snap. However, the Snap will not reject data that does not conform to the schema.
+
+If you wish to be strict about enforcing a schema, then you may provide your own validation of the input and output data during `execute`/`process`.
+
+In the `SchemaExample` sample above, the `validate` method is called before the data is written to the output view. It checks that the incoming document has the properties declared in the schema present (`colA`, `colB`, and `colC`).
+
+If the input data contains those keys, the document is written to the output view:
+
+![Valid Input](http://dl.dropboxusercontent.com/u/3519578/Screenshots/fiAa.png)
+
+If the input data does not contain all of those keys, a `SnapDataException` is thrown and the document is written to the error view:
+
+![Invalid Input](http://dl.dropboxusercontent.com/u/3519578/Screenshots/f4sZ.png)
 
 ## Exceptions and Error Views
 
-TK
+```java
+package com.snaplogic.api;
 
-## Working with Multiple Views
+/**
+ * This is the root exception for the jsdk module.
+ *
+ * All the other exceptions in jsdk module should derive from this exception. This exception
+ * should not be used directly by the Snap author. Snap author should use
+ * {@link com.snaplogic.api.ConfigurationException} or
+ * {@link com.snaplogic.api.ExecutionException}
+ */
+public class SnapException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+    
+    private String message;
+    private String reason;
+    private String resolution;
+
+    private static Pattern STACK_TRACE_PATTERN = Pattern.compile("\n[ \t]*at[ \t]+");
+
+    public SnapException(String message) {
+        super();
+        this.message = stripStackTrace(message);
+    }
+
+    public SnapException(String message, String reason) {
+        this(message);
+        this.reason = stripStackTrace(reason);
+    }
+
+    public SnapException(Throwable cause, String message) {
+        this(message);
+        super.initCause(cause);
+    }
+
+    public SnapException(Throwable cause, String message, String... params) {
+        this(cause, stringFormat(message, params));
+        this.reason = this.getMessage();
+    }
+
+    /**
+     * Applies the given parameter values to the message template string.
+     */
+    public SnapException formatWith(Object... params) {
+        String message = getMessage();
+        this.message = stripStackTrace(stringFormat(message, params));
+        return this;
+    }
+    ...
+    /**
+     * Sets the exception message for the user.
+     */
+    public final <T extends SnapException> T  withReason(final String reason) {
+        this.reason = stripStackTrace(reason);
+        return (T) this;
+    }
+
+    /**
+     * Sets the resolution for fixing this exception.
+     */
+    public final <T extends SnapException> T withResolution(String resolution) {
+        this.resolution = stripStackTrace(resolution);
+        return (T) this;
+    }
+
+    public final <T extends SnapException> T  withResolutionAsDefect() {
+        this.resolution = Messages.PLEASE_FILE_A_DEFECT_AGAINST_SNAP;
+        return (T) this;
+    }
+    ...
+```
+
+`SnapException` is the root exception type and extends `RuntimeException`. However, you should instead use one of the following implementations instead:
+
+Class | Where to Use | Description
+--------- | ----------- | -----------
+`ConfigurationException` | `configure()` | Throw when the Snap's settings are invalid.
+`ExecutionException` | `execute()` | Throw for internal, non-data-related ex errors. 
+`SnapDataException` | `execute()` | Throw for data-related errors.
+
+<aside class="notice">
+If your Snap extends <code>SimpleSnap</code>, thrown <code>SnapDataException</code>s will be automatically written to the error view.
+</aside>
+
+### Constructing Exceptions
+
+At it's most basic, a `SnapException` subclass instance just requires a failure message to be communicated to the user:
+
+<div class="inline-code">
+@Override
+public void execute() throws ExecutionException {
+	throw new ExecutionException("Message");
+}
+</div>
+
+This results in the following user experience:
+
+![Basic Exception](https://dl.dropboxusercontent.com/u/3519578/Screenshots/eX3K.png)
+
+When creating exceptions, we recommend providing a failure message, a reason, and a resolution:
+
+Parameter | Description
+--------- | -----------
+Message | High level explanation of the issue (what was the Snap trying to do).
+Reason | Detailed explanation of the issue (defaults to the root cause message).
+Resolution | What can the user do to fix the issue
+
+<div class="inline-code">
+@Override
+public void execute() throws ExecutionException {
+	String deptName = "deptName";
+
+	String message = "The \"%s\" field was missing.";
+	String reason = "This Snap requires all fields to be present in the data source.";
+	String resolution = String.format("Contact your DBA to ensure all model fields " +
+			"are present in the data source.", deptName);
+
+	throw new ExecutionException(message)
+		.formatWith(deptName)
+		.withReason(reason)
+		.withResolution(resolution);
+}		
+</div>
+
+![Reason and Resolution](https://dl.dropboxusercontent.com/u/3519578/Screenshots/FjIr.png)
+
+### ConfigurationException
+
+`ConfigurationException` instances should be thrown during `configure()`, when the pipeline is validating:
+
+<div class="inline-code">
+@Override
+public void configure(PropertyValues propertyValues) throws ConfigurationException {
+	throw new ConfigurationException("Error Message for User")
+		.withReason("A good reason.")
+		.withResolution("What to do next.");
+}
+</div>
+
+![Config Exception](https://dl.dropboxusercontent.com/u/3519578/Screenshots/JAB9.png)
+
+### Writing Exceptions to the Error View
+
+Throwing a new `SnapDataException` and writing it to the error view along with the input document that generated the data error, will display both the exception stacktrace and the original data. For example:
+
+<div class="inline-code">
+@Override
+public void execute() throws ExecutionException {
+	try {
+		throw new IllegalArgumentException("Illegal Argument.");
+	} catch (IllegalArgumentException e) {
+		SnapDataException snapDataException = new SnapDataException(e, "Error Message.")
+			.withResolution("Provide the correct argument.");
+
+		errorViews.write(snapDataException, document);
+	}
+}
+</div>
+
+will result in the following content written to the error view:
+
+![Error View Exception](http://dl.dropboxusercontent.com/u/3519578/Screenshots/DmKE.png)
+
+If your Snap extends `SimpleSnap`, it is even easier - just throw the `SnapDataException` and it will be written to the error view as above:
+
+<div class="inline-code">
+@Override
+public void process(Document document, String inputViewName) throws ExecutionException {
+	try {
+		throw new IllegalArgumentException("Illegal Argument.");
+	} catch (IllegalArgumentException e) {
+		throw new SnapDataException(e, "Error Message.")
+			.withResolution("Provide the correct argument.");
+	}
+}
+</div>
+
+<aside class="success">
+SnapLogic recommends always enabling a Document error view:
+
+<p><code>@Errors(min = 1, max = 1, offers = {ViewType.DOCUMENT})</code></p>
+</aside>
+
+## Customizing Input/Output Views
 
 ```java
+/**
+ * This Snap demonstrates two inputs and two outputs.
+ *
+ * It will output two streams, one for only males and another for females. 
+ * Unknowns will get sent to both.
+ *
+ * @author <you>
+ */
+@General(title = "Two Ins/Outs", purpose = "Accepts two inputs, sends to two outputs.",
+        author = "Your Company Name", docLink = "http://yourdocslinkhere.com")
+@Inputs(min = 2, max = 2)
+@Outputs(min = 2, max = 2, offers = {ViewType.DOCUMENT})
+@Errors(min = 1, max = 1, offers = {ViewType.DOCUMENT})
+@Version(snap = 1)
+@Category(snap = SnapCategory.READ)
+public class TwoInputsTwoOutputs extends SimpleSnap implements ViewProvider {
+    private static final Logger log = LoggerFactory.getLogger(TwoInputsTwoOutputs.class);
+    
+    private final static String INPUT_0 = "input0";
+    private final static String INPUT_1 = "input1";
+    private final static String MALE_VIEW = "output_male";
+    private final static String FEMALE_VIEW = "output_female";
+    
+    @Inject
+    private OutputViews outputViews;
+    
+    @Inject
+    private ErrorViews errorViews;
+
+    @Override
+    public void defineViews(final ViewBuilder viewBuilder) {
+        viewBuilder.describe(INPUT_0)
+                .type(ViewType.DOCUMENT)
+                .add(ViewCategory.INPUT);
+        viewBuilder.describe(INPUT_1)
+                .type(ViewType.DOCUMENT)
+                .add(ViewCategory.INPUT);
+
+        viewBuilder.describe(MALE_VIEW)
+                .type(ViewType.DOCUMENT)
+                .add(ViewCategory.OUTPUT);
+        viewBuilder.describe(FEMALE_VIEW)
+                .type(ViewType.DOCUMENT)
+                .add(ViewCategory.OUTPUT);
+    }
+
+    ...
+
+    @Override
+    public void process(Document document, String inputViewName) {
+        Document newdoc = document.copy();
+        Map<String, Object> data = newdoc.get(Map.class);
+
+        // Add a new field "processed"
+        data.put("processed", "True");
+
+        // send males to male output view
+        if (data.get("gender").equals("male")) {
+            outputViews.getDocumentViewFor(MALE_VIEW).write(newdoc);
+        } else if (data.get("gender").equals("female")) {
+            // send females to female output view
+            outputViews.getDocumentViewFor(FEMALE_VIEW).write(newdoc);
+        } else {
+            // send unknowns to error view
+            errorViews.write(newdoc, document);
+        }
+    }
+    
+    ...
+}
+```
+
+The `TwoInputsTwoOutputs` sample accepts documents from two input views and routes to a particular output view based on the value of the "gender" field:
+
+![TwoInOut](http://dl.dropboxusercontent.com/u/3519578/Screenshots/oHpC.png)
+
+### Reading from Multiple Input Views
+
+As it extends `SimpleSnap`, the "Two Ins/Outs" Snap benefits from already knowing how to read from multiple input views. `ExecutionUtil` iterates over the available input views and send each document to the `process()` method, [as shown previously](#bootstrapping-with-simplesnap). If you can guarantee that each input view will have documents sent to it, this is an acceptable solution. 
+
+<aside class="success">
+If you cannot guarantee that all input views will be written to, use <code>InputViews.select()</code> to poll the input views in a non-blocking manner. SnapLogic recommends this approach for most multiple-input view scenarios.
+</aside>
+
+### Configuring Optional Views
+
+It is rarely a good idea to prevent an input and output views for a Snap. For one, it prevents using that Snap as unlinked input at the beginning of [a Task pipeline](http://doc.snaplogic.com/tasks), and restricts its ability to be used mid-pipeline.
+
+However, if you wish to allow the user to remove all input and output views, it's best to declare the views as optional, to open them by default, and then have the user remove them through the **Views** tab of the Snap.
+
+This can be done by implementing the `ViewProvider` interface and using the `defineViews()` method's `ViewBuilder` argument:
+
+<div class="inline-code">
+@Inputs(min = 0, max = 1, accepts = {ViewType.DOCUMENT})
+@Outputs(min = 0, max = 1, offers = {ViewType.DOCUMENT})
+...
+// this creates the two open input views and the two named output views
 @Override
 public void defineViews(final ViewBuilder viewBuilder) {
-	// input
 	viewBuilder.describe(INPUT_0)
 			.type(ViewType.DOCUMENT)
 			.add(ViewCategory.INPUT);
 	viewBuilder.describe(INPUT_1)
 			.type(ViewType.DOCUMENT)
 			.add(ViewCategory.INPUT);
-			
-	// output
+
 	viewBuilder.describe(MALE_VIEW)
 			.type(ViewType.DOCUMENT)
 			.add(ViewCategory.OUTPUT);
@@ -1172,47 +1531,119 @@ public void defineViews(final ViewBuilder viewBuilder) {
 			.type(ViewType.DOCUMENT)
 			.add(ViewCategory.OUTPUT);
 }
-```
+</div>
 
-TK
-
-### ViewProvider.defineViews
-
-### Reading from Multiple Input Views
-
-TK
-
-> `TwoInputsTwoOutputs.java`
+![Remove Views](http://dl.dropboxusercontent.com/u/3519578/Screenshots/nFE8.png)
 
 ### Writing to Multiple Output Views
 
-```java
+`OutputViews.getDocumentViewFor(viewName)` can be used to return the document output view for the given view name:
+
+<div class="inline-code">
 // send males to male output view
 if (data.get("gender").equals("male")) {
-	count_gender_male++;
 	outputViews.getDocumentViewFor(MALE_VIEW).write(newdoc);
 } else if (data.get("gender").equals("female")) {
 	// send females to female output view
-	count_gender_female++;
 	outputViews.getDocumentViewFor(FEMALE_VIEW).write(newdoc);
 } else {
 	// send unknowns to error views
-	count_gender_unk++;
 	errorViews.write(newdoc, document);
+}
+</div>
+
+## Authenticating with Accounts
+
+```java
+package com.snaplogic.account.api;
+
+/**
+ * Interface for Account classes which can be used by Snap classes
+ *
+ * @param <T> as the return type for {@link #connect}
+ */
+public interface Account<T> {
+    /**
+     * Defines the properties of the account using the provided {@link PropertyBuilder}
+     * The property category is set to {@link PropertyCategory#ACCOUNT} and should not be
+     * changed.
+     *
+     * @param propertyBuilder as the builder
+     */
+    void defineProperties(final PropertyBuilder propertyBuilder);
+
+    /**
+     * Sets the property values on the account
+     *
+     * @param propertyValues as the property values
+     */
+    void configure(final PropertyValues propertyValues);
+
+    /**
+     * Allows to connect to the endpoint
+     *
+     * @return an optional value that might be needed to access the session
+     * @throws ExecutionException
+     */
+    T connect() throws ExecutionException;
+
+    /**
+     * Allows to disconnect from the endpoint
+     *
+     * @throws ExecutionException
+     */
+    void disconnect() throws ExecutionException;
 }
 ```
 
-> `TwoInputsTwoOutputs.java`
+Snap Accounts allow the re-use of authentication credentials between Snaps. They also permit storing, encrypting, and obfuscating sensitive information like passwords, secret keys etc.
 
-TK
+Similarly to Snaps, you may use the `defineProperties()` method to build the Settings tab UI, and the `configure()` method to bind/validate the user's input:
 
-## Supporting Accounts
+<div class="inline-code java">
+@Override
+public void defineProperties(PropertyBuilder propertyBuilder) {
+	propertyBuilder.describe(USER_ID, "User ID", "ID of the user")
+			.required()
+			// for Enhanced Account Encryption; indicate to the SnapLogic Platform
+			// that Medium/High Sensitivity-configured Organizations should encrypt
+			// this data
+			.sensitivity(SnapProperty.SensitivityLevel.MEDIUM)
+			.add();
 
-TK
+	propertyBuilder.describe(PASSPHRASE, "Passphrase", "The user's passphrase")
+			.required()
+			.obfuscate() // masks user's input and sets SensitivityLevel to HIGH
+			.add();
+}
+
+@Override
+public void configure(PropertyValues propertyValues) {
+	// Exercise: sanitize and validate
+	userId = propertyValues.get(USER_ID);
+	passphrase = propertyValues.get(PASSPHRASE);
+}
+</div>
+
+<aside class="warning">
+Unlike Snaps, you cannot <a href="#expression-enabled-properties">expression-enable</a> Account properties.
+</aside>
+
+The `Account` interface also defines a `connect()` method (whose return type is determined by the [Generic Type](https://docs.oracle.com/javase/tutorial/java/generics/types.html) provided by the implementing class) and `disconnect()` method.
+
+The `connect` method is called 
+
+AccountVariableProvider
 
 ### Validation
 
+ValidatableAccount
+
+ExtendedValidatableAccount
+
 ### Multiple Accounts
+
+MultiAccountBinding
 
 ## Developing Binary Snaps
 
@@ -1355,6 +1786,8 @@ public class PropertyTypes extends SimpleSnap {
 }
 ```
 
+add10
+
 ![Property Values](http://dl.dropboxusercontent.com/u/3519578/Screenshots/qJXX.png)
 
 ## SnapType Reference
@@ -1374,16 +1807,3 @@ ANY("any", Object.class),
 COMPOSITE("object", Map.class),
 BYTES("bytes", String.class);
 ```
-
-# ExpressionProperty Reference
-
-`getExpression()`
-`eval` x 3
-
-# Best Practices
-
-TK
-
-# Ultra, Spark, SnapReduce
-
-TK
