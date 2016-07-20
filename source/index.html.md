@@ -762,6 +762,13 @@ The `cleanup()` method, which is called after the Snap has completed its executi
 SnapLogic's Platform will enforce that all input documents have been fully consumed, otherwise an error will occur and the pipeline will fail.
 </aside>
 
+## Binary Input/Output Views
+
+TK
+
+### Headers
+
+
 ## Snap Categories
 
 The [Doc Consumer Snap's](#reading-documents-from-an-input-view) category (`SnapCategory.WRITE`) differs from [SingleDocGenerator's](#basic-snap-implementation) `SnapCategory.READ` category. 
@@ -1552,7 +1559,35 @@ if (data.get("gender").equals("male")) {
 }
 </div>
 
-## Authenticating with Accounts
+## Preview-specific Behavior
+
+`SuggestExecutionProvider` (confusing name)
+
+`configureForSuggest` and `executeForSuggest`
+
+# Deploying Snap Packs
+
+TK
+
+## Using Maven Goal snappack:deploy
+
+By default, will deploy to ASSET_DIR_PATH, no binaries
+
+### asset_path
+
+### binaries=true
+
+keys.properties and pom.xml needs to line up together
+
+## Uploading ZIP File through Manager UI
+
+Select ZIP file in Snap /target directory
+
+![Manager](https://dl.dropboxusercontent.com/u/3519578/Screenshots/WhVl.png)
+
+### Beware clashing Snap Schemas
+
+# Authenticating with Accounts
 
 ```java
 package com.snaplogic.account.api;
@@ -1596,94 +1631,182 @@ public interface Account<T> {
 }
 ```
 
-Snap Accounts allow the re-use of authentication credentials between Snaps. They also permit storing, encrypting, and obfuscating sensitive information like passwords, secret keys etc.
+Snap Accounts allow the re-use of authentication credentials and properties across Snaps. 
 
-Similarly to Snaps, you may use the `defineProperties()` method to build the Settings tab UI, and the `configure()` method to bind/validate the user's input:
+They also permit storing, encrypting, and obfuscating sensitive information like passwords, secret keys etc.
 
-<div class="inline-code java">
-@Override
-public void defineProperties(PropertyBuilder propertyBuilder) {
-	propertyBuilder.describe(USER_ID, "User ID", "ID of the user")
-			.required()
-			// for Enhanced Account Encryption; indicate to the SnapLogic Platform
-			// that Medium/High Sensitivity-configured Organizations should encrypt
-			// this data
-			.sensitivity(SnapProperty.SensitivityLevel.MEDIUM)
-			.add();
+## Account Configuration
 
-	propertyBuilder.describe(PASSPHRASE, "Passphrase", "The user's passphrase")
-			.required()
-			.obfuscate() // masks user's input and sets SensitivityLevel to HIGH
-			.add();
+```java
+@General(title = "Example Snap Account")
+@Version(snap = 1)
+@AccountCategory(type = AccountType.CUSTOM)
+public class ExampleAccount implements Account<String> {
+
+    protected static final String USER_ID = "userId";
+    protected static final String PASSPHRASE = "passphrase";
+
+    private String userId;
+    private String passphrase;
+
+    @Override
+    public void defineProperties(PropertyBuilder propertyBuilder) {
+        propertyBuilder.describe(USER_ID, "User ID", "ID of the user")
+                .required()
+                // for Enhanced Account Encryption; indicate to the SnapLogic Platform
+                // that Medium/High Sensitivity-configured Organizations should encrypt
+                // this data
+                .sensitivity(SnapProperty.SensitivityLevel.MEDIUM)
+                .add();
+
+        propertyBuilder.describe(PASSPHRASE, "Passphrase", "The user's passphrase")
+                .required()
+                .obfuscate() // masks user's input and sets SensitivityLevel to HIGH
+                .add();
+    }
+
+    @Override
+    public void configure(PropertyValues propertyValues) {
+        // Exercise: sanitize and validate
+        userId = propertyValues.get(USER_ID);
+        passphrase = propertyValues.get(PASSPHRASE);
+    }
+    
+    @Override
+    public String connect() throws ExecutionException {
+        /*
+        Return a String that conforms to this simple hash-token scheme:
+
+        base64(userId + ":" + expirationTimestamp + ":" +
+             md5(userId + ":" + expirationTimestamp + ":" passphrase))
+         */
+        long expiration = DateTime.now().plusDays(1).getMillis();
+        byte[] md5;
+
+        try {
+            MessageDigest md5MessageDigest = MessageDigest.getInstance("MD5");
+            md5 = md5MessageDigest.digest(
+                    (getUserId() + ":" + expiration + ":" + getPassphrase()).getBytes(UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new ExecutionException(e, "Unable to get MD5 MessageDigest instance")
+                    .withResolution("Contact the Snap Developer");
+        }
+
+        return encodeBase64String(
+                (userId + ":" + expiration + ":" + new String(md5)).getBytes(UTF_8));
+    }
+
+    @Override
+    public void disconnect() throws ExecutionException {
+        // no-op
+    }
+    
+    ...
 }
+```
 
-@Override
-public void configure(PropertyValues propertyValues) {
-	// Exercise: sanitize and validate
-	userId = propertyValues.get(USER_ID);
-	passphrase = propertyValues.get(PASSPHRASE);
-}
-</div>
+At their most basic, Accounts will implement the `Account` interface and provide a Generic Type that is used as the return type of the `Account.connect()` method.
+
+Similarly to Snaps, you may use the `defineProperties()` method to build the Settings tab UI, and the `configure()` method to bind/validate the user's input. 
 
 <aside class="warning">
 Unlike Snaps, you cannot <a href="#expression-enabled-properties">expression-enable</a> Account properties.
 </aside>
 
-The `Account` interface also defines a `connect()` method (whose return type is determined by the [Generic Type](https://docs.oracle.com/javase/tutorial/java/generics/types.html) provided by the implementing class) and `disconnect()` method.
+![Create Custom Account](https://dl.dropboxusercontent.com/u/3519578/Screenshots/fNOT.png)
 
-The `connect` method is called 
+<aside class="notice">
+Don't forget to declare the new Account in the Snap POM's <code>&lt;account.classes&gt;</code> element e.g.
+<br /><code>&lt;account.classes&gt;com.snaplogic.snaps.accounts.ExampleAccount&lt;/account.classes&gt;</code>
+</aside>
 
-AccountVariableProvider
+### Encrypting and Obfuscating User Input
 
-### Validation
+It can also be particular useful to mark particular properties as containing sensitive information and/or requiring input masking. 
+
+The `sensitivity()` builder method allows setting a `LOW`, `MEDIUM`, or `HIGH` `SensitivityLevel`, which instructs the SnapLogic Platform's [Enhanced Account Encryption](http://doc.snaplogic.com/account-encryption) feature to encrypt the marked account data.
+
+The `obfuscate()` builder method masks user input and automatically sets the property to `SensitivityLevel.HIGH`.
+
+### Connecting the Account
+
+The `Account` interface also defines a `connect()` method (whose return type is determined by the [Generic Type](https://docs.oracle.com/javase/tutorial/java/generics/types.html) provided by the implementing class) and a `disconnect()` method.
+
+For demonstration purposes, we've chosen to implement a simple hash-token scheme for creating an authentication String to be used within a Snap to connect to some service.
+
+## Using the Account in the Snap
+
+```java
+
+```
+
+### Exposing the Account properties in the Snap
+
+To begin with, you may wish to expose the properties of the Account in the Settings of the Snap to which the Account has been associated with.
+
+To do this, have the Account implement the `AccountVariableProvider` interface and its `getAccountVariableValue()` method e.g.
+
+<div class="inline-code>
+@General(title = "Example Snap Account")
+@Version(snap = 1)
+@AccountCategory(type = AccountType.CUSTOM)
+public class ExampleAccount implements Account<String>, AccountVariableProvider {
+	
+	...
+	
+    @Override
+    public Map<String, Object> getAccountVariableValue() {
+        return new ExpressionVariableAdapter() {
+            @Override
+            public Set<Entry<String, Object>> entrySet() {
+                return new ImmutableSet.Builder<Entry<String, Object>>()
+                        .add(entry(USER_ID, getUserId()))
+                        .add(entry(PASSPHRASE, getPassphrase()))
+                        .build();
+            }
+        };
+    }
+}
+</div>
+
+The `$account.userId` and `$account.passphrase` expression values can then be used within the Snap's expression-enabled properties.
+
+
+
+### Account Types
+
+In the `ExampleAccount` sample provided, the Account has been marked with the `@AccountCategory` annotation, whose `type` argument value is `AccountType.CUSTOM`    /**
+
+The list of provided Account Types are:
+
+* `NONE`
+* `CUSTOM`
+* `BASIC_AUTH`
+* `SSH`
+* `SSL`
+* `DATABASE`
+* `OAUTH2`
+* `OAUTH1`
+* `AWS_S3`
+* `SAP`
+
+## Validation
 
 ValidatableAccount
 
 ExtendedValidatableAccount
 
-### Multiple Accounts
+## Multiple Accounts
 
 MultiAccountBinding
-
-## Developing Binary Snaps
-
-TK
-
-### Headers
-
-## Preview-specific Behavior
-
-`SuggestExecutionProvider` (confusing name)
-
-`configureForSuggest` and `executeForSuggest`
-
-# Deploying Snap Packs
-
-TK
-
-## Using Maven Goal snappack:deploy
-
-By default, will deploy to ASSET_DIR_PATH, no binaries
-
-### asset_path
-
-### binaries=true
-
-keys.properties and pom.xml needs to line up together
-
-## Uploading ZIP File through Manager UI
-
-Select ZIP file in Snap /target directory
-
-![Manager](https://dl.dropboxusercontent.com/u/3519578/Screenshots/WhVl.png)
-
-### Beware clashing Snap Schemas
 
 # jtest: Snap Unit Testing Framework
 
 TK
 
-## @TestFixture
+## TestFixture
+
+test
 
 ### snap, input, output, errors
 
