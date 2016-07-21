@@ -1088,7 +1088,7 @@ public class DocGenerator implements Snap {
     @Inject
     private OutputViews outputViews;
     
-	private final ;
+	private int count;
 
     @Override
     public void defineProperties(PropertyBuilder propertyBuilder) {
@@ -1135,10 +1135,6 @@ Within `execute()`, we can then use the `count` in the loop.
 To demonstrate this new capability, we can use a "count" [Pipeline Property](http://doc.snaplogic.com/pipeline-properties) and then reference this in the Snap within a `parseInt` expression function:
 
 ![Doc Generator with Expression](https://dl.dropboxusercontent.com/u/3519578/Screenshots/Zin9.png)
-
-### @PlatformFeature(coerceAndValidateExpressions = true)
-
-TK
 
 ## Suggesting Property Values
 
@@ -1641,7 +1637,7 @@ If you cannot guarantee that all input views will be written to, use <code>Input
 
 ### Configuring Optional Views
 
-It is rarely a good idea to prevent an input and output views for a Snap. For one, it prevents using that Snap as unlinked input at the beginning of [a Task pipeline](http://doc.snaplogic.com/tasks), and restricts its ability to be used mid-pipeline.
+It is rarely a good idea to prevent either an input or an output view for a Snap. For one, it prevents using that Snap as unlinked input at the beginning of [a Task pipeline](http://doc.snaplogic.com/tasks), and restricts its ability to be used mid-pipeline.
 
 However, if you wish to allow the user to remove all input and output views, it's best to declare the views as optional, to open them by default, and then have the user remove them through the **Views** tab of the Snap.
 
@@ -1689,33 +1685,173 @@ if (data.get("gender").equals("male")) {
 }
 </div>
 
-## Preview-specific Behavior
+## Pipeline Validation/Preview-specific Behavior
 
-`SuggestExecutionProvider` (confusing name)
+```java
+package com.snaplogic.api;
+...
+/**
+ * This interface provides a way to implement the configuration and the execution
+ * of the snap for Preview/Validation (formerly known as "Suggest" action).
+ *
+ * NOTE: This interface is not mandatory to implement for a Snap author.
+ *
+ * If implemented, the <code>configureForSuggest</code> method will be called in place of the
+ * <code>configure</code> method of the Snap interface and the <code>executeForSuggest</code>
+ * method will be called in place of <code>execute</code> method of the Snap interface during
+ * Preview/Validation.
+ *
+ * If not implemented, the <code>configure</code> and the <code>execute</code> methods of the
+ * snap interface will be called during Preview/Validation.
+ *
+ * Usecase: A JMS consumer snap
+ *
+ * The JMS consumer indefinitely polls for the messages to arrive during the execution of the
+ * snap. This situation is not desirable for the Suggest/Save action as it will never complete.
+ * In addition, we also don't want to remove messages from the destination for the Suggest/Save
+ * action by acknowledging them.
+ *
+ * Hence, the snap author may implement the interface as following:
+ * <code>
+ *     ...
+ *
+ *     public void configure(PropertyValues propertyValues) throws ConfigurationException {
+ *         ...
+ *     }
+ *
+ *     public void configureForSuggest(PropertyValues propertyValues)
+ *              throws ConfigurationException {
+ *         // Fetch all the property values EXCEPT Acknowledgment mode.
+ *         // Lookup for ConnectionFactory and Destination objects.
+ *         // Create Connection object using the above ConnectionFactory
+ *         // Create Session object using Session.CLIENT_ACKNOWLEDGE as an acknowledgment mode
+ *     }
+ *
+ *     public void execute() throws ExecutionException {
+ *         ...
+ *     }
+ *
+ *     public void executeForSuggest() throws ExecutionException {
+ *         try {
+ *             Message message = consumer.receive(5000);
+ *             if (message != null) {
+ *                 processMessage(message);
+ *                 // Don't acknowledge the message so that it does't
+ *                 // get removed from the destination
+ *             }
+ *         } catch (JMSException e) {
+ *             // Handle the exception
+ *         }
+ *
+ *     }
+ *     ...
+ * </code>
+ */
+public interface SuggestExecutionProvider {
+    /**
+     * This method will be called for the Snap configuration during Suggest
+     *
+     * @param propertyValues
+     * @param maxSuggestValue as the maximum of rows/time being read
+     */
+    void configureForSuggest(PropertyValues propertyValues,
+            BigInteger maxSuggestValue) throws ConfigurationException;
 
-`configureForSuggest` and `executeForSuggest`
+    /**
+     * This method will be called for the Snap execution during Suggest
+     */
+    void executeForSuggest() throws ExecutionException;
+}
+```
+
+If pipeline validation is enabled and the user saves the pipeline in the Designer, the SnapLogic Platform attempts to validate the pipeline and displays preview data between Snaps.
+
+When validating the pipeline, the Platform will attempt to limit the amount of data processed (for example, up to 50 input documents) as it is not a full pipeline execution but rather a tool to give visual feedback on the data as it flows through the pipeline.
+
+If your Snap wishes to customize its behaviour during pipeline, it can implement the `SuggestExecutionProvider` interface.
+
+<aside class="notice">
+"Suggest" is the legacy name for the Pipeline Validation and Preview feature and not related to <a href="#suggesting-property-values">the current Property Suggest feature</a> in a Snap's Settings. Our apologies for any confusion this will cause.
+</aside>
+
+As per the JavaDocs of `SuggestExecutionProvider`, implementing the `configureForSuggest()` and `executeForSuggest()` methods can trigger specific behavior during Snap configuration and execution when the pipeline is being validated.
+
+A thrown `SuggestViewAbortException` can indicate that the pipeline validation/preview-specific behavior threshold has been reached.
 
 # Deploying Snap Packs
 
-TK
+Now that we understand how to build a Snap, let's see how to deploy it so it can be used within the SnapLogic Platform.
 
-## Using Maven Goal snappack:deploy
+Snap Packs are Maven projects, so they benefit from rich tooling support on the terminal, within IDE plugins, and from Continuous Integration servers.
 
-By default, will deploy to ASSET_DIR_PATH, no binaries
+There are two ways to deploy a Snap Pack - one targeted for developers seeking rapid deployment during Snap development, the other for Organization admin and/or operational users to upload through the SnapLogic Manager UI.
+
+## mvn snappack:deploy
+
+```shell
+$ cd $SNAP_HOME/demosnappack
+$ mvn clean install
+$ mvn snappack:deploy
+```
+
+The [Snap Archetype](#snap-maven-archetype) POM includes the `snappack-installer` plugin which contains the `snappack:deploy` goal.
+
+After building the Snap Pack with `mvn clean package`, the `snappack:deploy` goal POSTs the Snap Schema to endpoint associated to the `jcc.sldb_uri` property in `~/opt/snaplogic/etc/keys.properties`. 
+
+It will use the properties and credentials defined in the Snap's `pom.xml` and the `~/opt/snaplogic/etc/keys.properties` file respectively - it is imperatively that they are configured correctly.
+
+By default, the binaries will not be deployed (it will look for the ZIP of JARs using the `$SNAP_HOME` environment variable) and will deploy to [the `ASSET_DIR_PATH` specified in the `directives` file](#project-structure) in *src/main/config*.
 
 ### asset_path
 
-### binaries=true
+Use the `asset_path` parameter if you wish to override the value of the `ASSET_DIR_PATH` specified in the directives file e.g. `mvn snappack:deploy -Dasset_path=/snaplogic/shared`.
 
-keys.properties and pom.xml needs to line up together
+This can be a useful feature for Continuous Integration and Continuous Deployment tools.
+
+### binaries
+
+Use the `binaries` boolean parameter to permit the Snap to be executed on Snaplexes other than the development Snaplex configured earlier, you can instruct the goal to upload the ZIP of the Snap's JAR files (source and dependencies) to SLDB.
+
+`mvn snappack:deploy -Dbinaries=true`
+
+<aside class="success">
+We recommend using this Maven goal during Snap development, to be run on a development Snaplex, and to deploy to a dedicated development project folder or a Project Space, rather than your Organization's root shared directory.
+<br />
+<br />
+While every effort has been made to ensure the stability of this feature, it is possible for it to upload versions in conflict with other versions of the Snap deployed through the Manager, or for other errors to occur. If that takes place, use the Manager UI Snap Pack ZIP upload method instead (see below).
+</aside>
 
 ## Uploading ZIP File through Manager UI
 
-Select ZIP file in Snap /target directory
+```shell
+$ ls -al ~/opt/snaplogic-dev/demosnappack/target/ | grep zip
+-rw-r--r--   1 snapdev  staff  52588 Jul 21 01:46 demosnappack-1-0001.zip
+```
+
+After a `mvn clean install` execution, the Snap's `target` directory will contain a Snap Pack ZIP file containing the zipped source and dependency JARs of the Snap, the Snap and Account schema files, and a `MANIFEST`.
+
+This ZIP file can then be uploaded through the Manager UI to the root/project folder/Project Space directory of your choice.
 
 ![Manager](https://dl.dropboxusercontent.com/u/3519578/Screenshots/WhVl.png)
 
-### Beware clashing Snap Schemas
+<aside class="success">
+We recommended using this method of deployment when releasing a stable version of your custom Snap to your users, and when uploading to the Organization's root shared directory. Preferably, development versions of the Snap Pack should be deleted from development project folders and/or Project Spaces prior to this to avoid confusion.
+<br />
+<br />
+In the near future, SnapLogic will update the <code>snappack:deploy</code> goal to upload the Snap Pack ZIP file to match this process.
+</aside>
+
+### Troubleshooting
+
+The SnapLogic Platform will attempt to load the version of the Snap Pack associated with the pipeline's saved location, falling back to the Organization's root shared directory if needed.
+
+If multiple versions of a custom Snap exist in different location, and with incompatible Snap Schemas, the Platform can experience issues if pipelines containing that custom Snaps are moved between the locations.
+
+Also, always refresh the browser after uploading a new version of a Snap Pack containing Snap or Account Schema changes. If the problem persists, also consider deleting the entries in your browser's session storage:
+
+![Session Storage](http://dl.dropboxusercontent.com/u/3519578/Screenshots/s45d.png)
+
+If during local development your find your local Snaplex/JCC picking up Snap changes, stop and restart it.
 
 # Authenticating with Accounts
 
@@ -2149,21 +2285,399 @@ TK
 
 ## TestFixture
 
-test
+```java
+package com.snaplogic.snap.test.harness;
+...
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface TestFixture {
 
-### snap, input, output, errors
+    /**
+     * Returns the snap to be tested.
+     *
+     * @return snapToTest
+     */
+    Class<?> snap() default Snap.class;
 
-### inputHeaders, expectedOutputPath, expectedErrorPath
+    /**
+     * Returns the account to be tested.
+     *
+     * @return accountToTest
+     */
+    Class<? extends Account> account() default Account.class;
 
-### properties, propertyOverrides
+    /**
+     * Returns the input file path for this unit test.
+     *
+     * @return inputFilePaths
+     */
+    String input() default "";
 
-### suggestProperty
+    /**
+     * Returns the names of the input views for this unit test.
+     * <p>The input name has to match the one defined in the input properties file.
+     *
+     * @return inputViewNames
+     */
+    String[] inputs() default {};
 
-### account, accountProperties
+    /**
+     * Returns the names of the output views for this unit test.
+     *
+     * @return outputViewNames
+     */
+    String[] outputs() default {};
 
-### injectorModule
+    /**
+     * The path to the directory where expected output files can be found.  The files are named
+     * based on the test method name followed by "-out.json" (e.g. testBasic-out.json).  Expected
+     * output will be written to a temporary directory on failure, so you can just copy the files
+     * from there to the expected directory if an update is needed.
+     *
+     * @return expectedOutputPath
+     */
+    String expectedOutputPath() default "";
+
+    /**
+     * Returns the names of the error views for this unit test.
+     *
+     * @return errorViewNames
+     */
+    String[] errors() default {};
+
+    /**
+     * The path to the directory where expected error output files can be found.  The files are
+     * named based on the test method name followed by "-err.json" (e.g. testBasic-err.json).
+     * Expected output will be written to a temporary directory on failure, so you can just copy
+     * the files from there to the expected directory if an update is needed.
+     *
+     * @return expectedErrorPath
+     */
+    String expectedErrorPath() default "";
+    
+    ...
+    
+}
+```
+
+[Unit Testing Snaps with SnapTestRunner](#unit-testing-snaps-with-snaptestrunner)
+
+## snap, input, output, errors, expectedOutputPath, expectedErrorPath
+
+## properties, propertyOverrides
+
+```java
+package com.snaplogic.snap.test.harness;
+...
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface TestFixture {
+	
+	...
+	
+    /**
+     * Returns the configuration properties for this unit test.
+     *
+     * @return configPropertiesFile
+     */
+    String properties() default "";
+
+    /**
+     * Overrides for Snap properties specified by the properties file.  The value should be
+     * pairs of strings where the left-side is the JSON-Path to write and the right-side is
+     * the JSON-encoded value to store in the path.
+     *
+     * @return propertyOverrides
+     */
+    String[] propertyOverrides() default {};
+
+    ...
+    
+}
+```
+
+## suggestProperty
+
+```java
+package com.snaplogic.snap.test.harness;
+...
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface TestFixture {
+	
+	...
+
+    /**
+     * The path to the snap property to do suggestions for.  The result of the suggestions
+     * is written to a fake output view so that you can use the expectedOutputPath mechanism
+     * to validate the results.
+     *
+     * @return suggestProperty
+     */
+    String suggestProperty() default "";
+    
+    ...
+}
+```
+
+## account, accountProperties
+
+```java
+package com.snaplogic.snap.test.harness;
+...
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface TestFixture {
+
+    /**
+     * Returns the snap to be tested.
+     *
+     * @return snapToTest
+     */
+    Class<?> snap() default Snap.class;
+
+    /**
+     * Returns the account to be tested.
+     *
+     * @return accountToTest
+     */
+    Class<? extends Account> account() default Account.class;
+
+    /**
+     * Returns the input file path for this unit test.
+     *
+     * @return inputFilePaths
+     */
+    String input() default "";
+
+    /**
+     * Returns the names of the input views for this unit test.
+     * <p>The input name has to match the one defined in the input properties file.
+     *
+     * @return inputViewNames
+     */
+    String[] inputs() default {};
+
+    /**
+     * Returns the names of the output views for this unit test.
+     *
+     * @return outputViewNames
+     */
+    String[] outputs() default {};
+
+    /**
+     * The path to the directory where expected output files can be found.  The files are named
+     * based on the test method name followed by "-out.json" (e.g. testBasic-out.json).  Expected
+     * output will be written to a temporary directory on failure, so you can just copy the files
+     * from there to the expected directory if an update is needed.
+     *
+     * @return expectedOutputPath
+     */
+    String expectedOutputPath() default "";
+
+    /**
+     * Returns the names of the error views for this unit test.
+     *
+     * @return errorViewNames
+     */
+    String[] errors() default {};
+
+    /**
+     * The path to the directory where expected error output files can be found.  The files are
+     * named based on the test method name followed by "-err.json" (e.g. testBasic-err.json).
+     * Expected output will be written to a temporary directory on failure, so you can just copy
+     * the files from there to the expected directory if an update is needed.
+     *
+     * @return expectedErrorPath
+     */
+    String expectedErrorPath() default "";
+
+    /**
+     * Returns the configuration properties for this unit test.
+     *
+     * @return configPropertiesFile
+     */
+    String properties() default "";
+
+    /**
+     * Overrides for Snap properties specified by the properties file.  The value should be
+     * pairs of strings where the left-side is the JSON-Path to write and the right-side is
+     * the JSON-encoded value to store in the path.
+     *
+     * @return propertyOverrides
+     */
+    String[] propertyOverrides() default {};
+
+    /**
+     * The path to the snap property to do suggestions for.  The result of the suggestions
+     * is written to a fake output view so that you can use the expectedOutputPath mechanism
+     * to validate the results.
+     *
+     * @return suggestProperty
+     */
+    String suggestProperty() default "";
+
+    /**
+     * Returns a Supplier that will return a string that contains the properties. This is
+     * useful when the properties should be determined at runtime instead of statically.
+     * The properties setting is preferred, so if both are set only the properties value
+     * will be used.
+     *
+     * @return dynamicProperties
+     */
+    Class<? extends Supplier<String>> dynamicProperties() default DefaultSupplier.class;
+
+    /**
+     * The default for the dynamicProperties setting. If used, then the SnapExecutor will
+     * ignore.
+     */
+    final class DefaultSupplier implements Supplier<String> {
+        @Override
+        public String get() {
+            return "";
+        }
+    }
+
+    /**
+     * Empty module used as the default for injectorModule
+     */
+    final class DefaultModule implements Module {
+        @Override
+        public void configure(final Binder binder) {
+        }
+    }
+
+    /**
+     * Module that can override bindings in the default test module.
+     *
+     * @return module
+     */
+    Class<? extends Module> injectorModule() default DefaultModule.class;
+
+    /**
+     * Returns the account configuration properties for this unit test.
+     *
+     * @return accountConfigPropertiesFile
+     */
+    String accountProperties() default "";
+
+    /**
+     * Returns the env document for this unit test.
+     *
+     * @return envDocument
+     */
+    String env() default "";
+
+    /**
+     * Returns an array of data file paths. These files will be available in the
+     * {@link URLStreamHandlerFactory} factory.
+     *
+     * @return dataFiles
+     */
+    String[] dataFiles() default {};
+
+    /**
+     * If specified, an instance of this class will be created and used to supply an
+     * array of data file paths for the {@link URLStreamHandlerFactory} factory.
+     * This is an alternative to specifying the dataFiles attribute when the same set of data files
+     * is needed by multiple tests.  If both dataFiles and dataFilesSupplier are specified,
+     * dataFiles will be used.
+     */
+    Class<? extends Supplier<String[]>> dataFilesSupplier() default DefaultDataFilesSupplier.class;
+
+    /**
+     * The default for the dataFilesSupplier attribute.
+     */
+    final class DefaultDataFilesSupplier implements Supplier<String[]> {
+
+        private static final String[] NO_FILES = {};
+
+        public String[] get() {
+            return NO_FILES;
+        }
+    }
+
+    /**
+     * Returns the exception that is expected from this test fixture.
+     *
+     * @return expectedException
+     */
+    Class<? extends Exception> exception() default DefaultException.class;
+
+    /**
+     * This default exception is used to make the exception field value optional. This just a
+     * work around so that Test fixtures don't have to have exception field always.
+     */
+    final class DefaultException extends Exception {
+    }
+
+    /**
+     * Provides a custom stream handler to overwrite the behavior of
+     * {@link com.snaplogic.snap.test.harness.UrlStreamFactoryImpl}
+     *
+     * @return the class of the custom stream handler
+     */
+    Class<? extends URLStreamHandler> customStreamHandler() default URLStreamHandler.class;
+
+    boolean preservesLineage() default true;
+
+    boolean runSparkExec() default false;
+}
+```
+
+## injectorModule
+
+```java
+package com.snaplogic.snap.test.harness;
+...
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface TestFixture {
+
+	...
+	
+    /**
+     * Module that can override bindings in the default test module.
+     *
+     * @return module
+     */
+    Class<? extends Module> injectorModule() default DefaultModule.class;
+
+	...
+}
+```
 
 ### data files, dataFilesSupplier
+
+```java
+package com.snaplogic.snap.test.harness;
+...
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface TestFixture {
+	
+	...
+	
+    /**
+     * Returns an array of data file paths. These files will be available in the
+     * {@link URLStreamHandlerFactory} factory.
+     *
+     * @return dataFiles
+     */
+    String[] dataFiles() default {};
+
+    /**
+     * If specified, an instance of this class will be created and used to supply an
+     * array of data file paths for the {@link URLStreamHandlerFactory} factory.
+     * This is an alternative to specifying the dataFiles attribute when the same set of data files
+     * is needed by multiple tests.  If both dataFiles and dataFilesSupplier are specified,
+     * dataFiles will be used.
+     */
+    Class<? extends Supplier<String[]>> dataFilesSupplier() default DefaultDataFilesSupplier.class;
+
+	...
+}
+```
 
 # PropertyBuilder Reference
 
