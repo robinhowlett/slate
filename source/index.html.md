@@ -695,7 +695,7 @@ jtest provides `SnapTestRunner`, a custom JUnit test runner which simulates the 
 
 Test methods are annotated with the `@TestFixture` annotation, which specifies what Snap implementation to use, input/output/error views configured, property settings specified, accounts associated etc.
 
-The test method should take a single `TestResult testResult` argument, which can be used within the test to determine whether the correct output was written (using an `OutputRecorder`), if errors occurred etc.
+The test method should take a single `TestResult` argument, which can be used within the test to determine whether the correct output was written (using an `OutputRecorder`), if errors occurred etc.
 
 In the `SingleDocGeneratorTest` sample provided, we can see that the test method focuses on examining that the `TestResult` did not receive any thrown exceptions, and that the declared output view registered the expected number of documents processed.
 
@@ -2203,32 +2203,46 @@ This is useful when an Account can be validated in a different manner versus con
 ## Supporting Multiple Accounts
 
 ```java
-package com.snaplogic.account.api.capabilities;
+package com.snaplogic.snaps;
 ...
-/**
- * Provides a module that binds an instance of the account to the
- * {@link com.snaplogic.account.api.Account} interface.
- *
- * <p>This can be used when a snap class defines multiple accounts via the @Accounts annotations.
- * One of the accounts will then be injected into the Snap class, depending on the choice the
- * user made for the Snap. The returned module must then bind the {@link com.snaplogic.account
- * .api.Account} interface to the instance.</p>
- *
- * <p>As an example:
- * <code>bind(Key.get(new TypeLiteral<Account<String>>() {})).toInstance(account)</code> will
- * bind the instance to the Account of type String.</p>
- *
- * @param <T> as the type of the account
- */
-public interface MultiAccountBinding<T> {
-
-    /**
-     * Returns the module for the account binding.
-     *
-     * @param account as the account instance
-     * @return the module used for injecting the instance into the snap class
+import com.snaplogic.account.api.capabilities.MultiAccountBinding;
+...
+@Accounts(provides = {ExampleAccount.class, AnotherAccount.class})
+public class SnapWithAccount extends SimpleSnap implements MultiAccountBinding<Account<String>> {
+	
+	/*
+    Step #1: when the Snap is initialized, the Account type (with String generic type) is 
+    bound to the Account instance registered with the Snap.
      */
-    public Module getManagedAccountModule(T account);
+    @Override
+    public Module getManagedAccountModule(final Account<String> account) {
+        return new AbstractModule() {
+            @Override
+            protected void configure() {
+                bind(Key.get(new TypeLiteral<Account<String>>() {})).toInstance(account);
+            }
+        };
+    }
+    
+    ...
+    
+    /*
+    Step #2: Guice will inject the Account instance that was bound below.
+     */
+    @Inject
+    private Account<String> snapAccount;
+	
+	...
+    
+    /*
+    Step 3: by the time it gets here, snapAccount will have been bound to the Account 
+    instance in the Account Registry for this Snap.
+     */
+    @Override
+    protected void process(Document document, String s) {
+        String token = snapAccount.connect();
+        ...
+    }
 }
 ```
 
@@ -2238,446 +2252,265 @@ The `MultiAccountBinding` interface possesses a `getManagedAccountModule()` meth
 
 Implementations of this method can then return an [`AbstractModule`](https://google.github.io/guice/api-docs/latest/javadoc/index.html?com/google/inject/AbstractModule.html) instance which binds the `Account<String>` type literal [to the instance](https://github.com/google/guice/wiki/InstanceBindings) of the `Account` registered with the Snap.
 
-Then, when it is time for the `Account<String>` instance to be injected, Guice will use the instance bound to above and assign it to the `snapAccount` instance variable:
-
-<div class="inline-code">
-...
-@Accounts(provides = {ExampleAccount.class, AnotherAccount.class})
-public class SnapWithAccount extends SimpleSnap implements MultiAccountBinding&lt;Account&lt;String&gt;&gt; {
-
-	/*
-	Step #2: Guice will inject the Account instance that was bound below.
-	 */
-    @Inject
-    private Account&lt;String&gt; snapAccount;
-    
-    /*
-	Step #1: the Account type (with String generic type) is 
-	bound to the Account instance registered with the Snap.
-	 */
-	@Override
-    public Module getManagedAccountModule(final Account&lt;String&gt; account) {
-        return new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(Key.get(new TypeLiteral&lt;Account&lt;String&gt;&gt;() {})).toInstance(account);
-            }
-        };
-    }
-
-	...
-	
-	/*
-	Step 3: by the time it gets here, snapAccount will have been bound to the Account 
-	instance in the Account Registry for this Snap.
-	 */
-    @Override
-    protected void process(Document document, String s) {
-        String token = snapAccount.connect();
-        ...
-    }
-}
-</div>
+Then, when it is time for the `Account<String>` instance to be injected, Guice will use the instance bound to above and assign it to the `snapAccount` instance variable.
 
 # jtest: Snap Unit Testing Framework
 
-TK
+We briefly touched on unit testing Snaps with **jtest** earlier in the [Unit Testing Snaps with SnapTestRunner](#unit-testing-snaps-with-snaptestrunner) section. 
 
-## TestFixture
+In the provided `SingleDocGeneratorTest` sample, we saw how to use the `SnapTestRunner` JUnit runner, and how to use the `@TestFixture` annotation to target a Snap, simulate its execution, and verify its output.
+
+## Declarative Testing with TestFixture
+
+`@TestFixture` is the annotation for declaratively setting up a Snap unit test.
+
+It provides a number of methods to make testing a Snap as easy as possible. Indeed, it is possible to test a Snap entirely without writing an test-specific implementation.
+
+Method | Description
+--------- | -----------
+`snap` 				| Returns the Snap class to be tested.
+`input` 			| Returns the path to the file that represents the input data.
+`inputs` 			| Returns the names of the input views for this unit test.<br />The input name has to match the one<br />defined in the input properties file.
+`outputs` 			| Returns the names of the output views for this unit test.
+`errors` 			| Returns the names of the error views for this unit test.
+`exception` 		| Returns the exception class that is expected to be thrown.
+`expectedOutputPath` | The path to the directory where expected output<br />files can be found.<br />The files are named based on the test method name followed by<br />"-out.json" (e.g. testBasic-out.json).<br />Expected output will be written to a<br />temporary directory on failure,<br />so you can just copy the files from there<br />to the expected directory if an update is needed.
+`expectedErrorPath` | The path to the directory where expected error output<br />files can be found.<br />The files are named based on the test method name followed by<br />"-err.json" (e.g. testBasic-err.json).<br />Expected output will be written to a<br />temporary directory on failure,<br />so you can just copy the files from there<br />to the expected directory if an update is needed.
+`account` 			| Returns the Account class to be tested.
+`accountProperties` | Returns the path to the Account properties<br />file to use for this unit test.
+`properties` 		| Returns the path to the Snap properties<br />file to use for this unit test.
+`propertyOverrides` | Overrides for Snap properties specified by<br />the properties file.<br />The value should be pairs of strings where the left-side<br />is the JSON-Path to write and the right-side is the<br />JSON-encoded value to store in the path.
+`injectorModule` 	| [Guice Module](https://google.github.io/guice/api-docs/latest/javadoc/index.html?com/google/inject/Module.html) that can override bindings<br />in the default test module.
+`dataFiles` 		| Returns an array of data file paths.<br />These files will be available in the `URLStreamHandlerFactory` factory.
+`dataFilesSupplier` | If specified, an instance of this class will be created<br />and used to supply an array of data file paths<br />for the `URLStreamHandlerFactory` factory.<br />This is an alternative to specifying `dataFiles` when<br />the same set of data files is needed by multiple tests.<br />If both `dataFiles` and `dataFilesSupplier` are specified,<br />`dataFiles` will be used.
+`dataFilesSupplier` | If specified, an instance of this class will be created<br />and used to supply an array of data file paths<br />for the `URLStreamHandlerFactory` factory.<br />This is an alternative to specifying `dataFiles` when<br />the same set of data files is needed by multiple tests.<br />If both `dataFiles` and `dataFilesSupplier` are specified<br />, `dataFiles` will be used.
+
+The following sections will use the unit tests included in the [Snap Maven Archetype](#snap-maven-archetype).
+
+## Recording Output Test Data
 
 ```java
-package com.snaplogic.snap.test.harness;
-...
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface TestFixture {
+@RunWith(SnapTestRunner.class)
+public class SingleDocGeneratorTest {
 
-    /**
-     * Returns the snap to be tested.
-     *
-     * @return snapToTest
-     */
-    Class<?> snap() default Snap.class;
+    @TestFixture(snap = SingleDocGenerator.class,
+            <strong>outputs = "output0"</strong>)
+    public void testSingleDocGeneratorFunctionality(TestResult testResult)
+            throws Exception {
+        assertNull(testResult.getException());
+        <strong>OutputRecorder outputRecorder = testResult.getOutputViewByName("output0");</strong>
+        assertEquals(1, outputRecorder.getRecordedData().size());
+    }
 
-    /**
-     * Returns the account to be tested.
-     *
-     * @return accountToTest
-     */
-    Class<? extends Account> account() default Account.class;
-
-    /**
-     * Returns the input file path for this unit test.
-     *
-     * @return inputFilePaths
-     */
-    String input() default "";
-
-    /**
-     * Returns the names of the input views for this unit test.
-     * <p>The input name has to match the one defined in the input properties file.
-     *
-     * @return inputViewNames
-     */
-    String[] inputs() default {};
-
-    /**
-     * Returns the names of the output views for this unit test.
-     *
-     * @return outputViewNames
-     */
-    String[] outputs() default {};
-
-    /**
-     * The path to the directory where expected output files can be found.  The files are named
-     * based on the test method name followed by "-out.json" (e.g. testBasic-out.json).  Expected
-     * output will be written to a temporary directory on failure, so you can just copy the files
-     * from there to the expected directory if an update is needed.
-     *
-     * @return expectedOutputPath
-     */
-    String expectedOutputPath() default "";
-
-    /**
-     * Returns the names of the error views for this unit test.
-     *
-     * @return errorViewNames
-     */
-    String[] errors() default {};
-
-    /**
-     * The path to the directory where expected error output files can be found.  The files are
-     * named based on the test method name followed by "-err.json" (e.g. testBasic-err.json).
-     * Expected output will be written to a temporary directory on failure, so you can just copy
-     * the files from there to the expected directory if an update is needed.
-     *
-     * @return expectedErrorPath
-     */
-    String expectedErrorPath() default "";
-    
-    ...
-    
 }
 ```
 
-[Unit Testing Snaps with SnapTestRunner](#unit-testing-snaps-with-snaptestrunner)
+Specify an output view name in `outputs` and then call `getRecordedData()` on the `OutputRecorder` instance returned by the `testResult.getOutputViewByName()` call using that same output view name.
 
-## snap, input, output, errors, expectedOutputPath, expectedErrorPath
-
-## properties, propertyOverrides
+## Examining Error Views
 
 ```java
-package com.snaplogic.snap.test.harness;
-...
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface TestFixture {
-	
-	...
-	
-    /**
-     * Returns the configuration properties for this unit test.
-     *
-     * @return configPropertiesFile
-     */
-    String properties() default "";
-
-    /**
-     * Overrides for Snap properties specified by the properties file.  The value should be
-     * pairs of strings where the left-side is the JSON-Path to write and the right-side is
-     * the JSON-encoded value to store in the path.
-     *
-     * @return propertyOverrides
-     */
-    String[] propertyOverrides() default {};
+@RunWith(SnapTestRunner.class)
+public class SchemaExampleTest {
 
     ...
-    
+
+    @TestFixture(snap = SchemaExample.class,
+            input = "data/schema_invalid_input.data",
+            outputs = "output0",
+            <strong>errors = "error0"</strong>)
+    public void testInValidDataAgainstSchema(TestResult testResult)
+            throws Exception {
+        // Since the input document does not conform to the expected schema,
+        // there should be no output.
+        OutputRecorder outputRecorder = testResult.getOutputViewByName("output0");
+        assertEquals(0, outputRecorder.getDocumentCount());
+
+        // Input document should be forwarded to the error view as it does not
+        // match the expected schema.
+        <strong>OutputRecorder errorRecorder = testResult.getErrorViewByName("error0");</strong>
+        assertEquals(1, errorRecorder.getDocumentCount());
+    }
 }
 ```
 
-## suggestProperty
+Very similar to [Recording Output Test Data](#recording-output-test-data), except the `testResult.getErrorViewByName()` method is called instead.
+
+## Providing Input Test Data
 
 ```java
-package com.snaplogic.snap.test.harness;
-...
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface TestFixture {
-	
-	...
+@RunWith(SnapTestRunner.class)
+public class SchemaExampleTest {
 
-    /**
-     * The path to the snap property to do suggestions for.  The result of the suggestions
-     * is written to a fake output view so that you can use the expectedOutputPath mechanism
-     * to validate the results.
-     *
-     * @return suggestProperty
-     */
-    String suggestProperty() default "";
-    
+    @TestFixture(snap = SchemaExample.class,
+            input = "data/schema_valid_input.data",
+            outputs = "output0")
+    public void testValidDataAgainstSchema(TestResult testResult)
+            throws Exception {
+        // Input document should appear on the output
+        OutputRecorder outputRecorder = testResult.getOutputViewByName("output0");
+        assertEquals(1, outputRecorder.getDocumentCount());
+    }
+
     ...
 }
 ```
 
-## account, accountProperties
+`input` specifies the path to the file that represents the data entering the input view, for example:
+
+*data/schema_valid_input.data*
+<div class="inline-code">
+{
+    "input0" : [
+        {
+            "colA" : "colA",
+            "colB" : "colB",
+            "colC" : "colC"
+        }
+    ]
+}
+</div>
+
+The format of the input data file is:
+
+<div class="inline-code">
+{
+	"input_view_name" : data (can be a dict, an array or primitives),
+	"input_view_name" : data (can be a dict, an array or primitives)
+}
+</div>
+
+Example:
+
+<div class="inline-code">
+{
+	"input0" : [1, 2, 3, 4, 5],
+	"input1" : ["foo", "bar", "baz"]
+}
+</div>
+
+The format of a binary input data file is:
+
+<div class="inline-code">
+{
+	"input_view_name" : [data_file_path, ...],
+	"input_view_name" : [data_file_path, ...]
+}
+</div>
+
+Example:
+
+<div class="inline-code">
+{
+	"input0" : ["data/files/json_input1.json", "data/files/json_input1.json"],
+	"input1" : ["data/files/json_input2.json"]
+}
+</div>
+
+Optionally, headers can be specified for any array element as follows:
+
+<div class="inline-code">
+{
+	"input0" : [
+		{
+			"header" : {
+				"content-type" : "application/json"
+			},
+			"content" : "data/files/json_input1.json"
+		}, 
+		"data/files/json_input1.json"
+	],
+	"input1" : ["data/files/json_input2.json"]
+}
+</div>
+
+## Specifying Snap Test Properties
 
 ```java
-package com.snaplogic.snap.test.harness;
-...
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface TestFixture {
+@RunWith(SnapTestRunner.class)
+public class DocGeneratorTest {
 
-    /**
-     * Returns the snap to be tested.
-     *
-     * @return snapToTest
-     */
-    Class<?> snap() default Snap.class;
-
-    /**
-     * Returns the account to be tested.
-     *
-     * @return accountToTest
-     */
-    Class<? extends Account> account() default Account.class;
-
-    /**
-     * Returns the input file path for this unit test.
-     *
-     * @return inputFilePaths
-     */
-    String input() default "";
-
-    /**
-     * Returns the names of the input views for this unit test.
-     * <p>The input name has to match the one defined in the input properties file.
-     *
-     * @return inputViewNames
-     */
-    String[] inputs() default {};
-
-    /**
-     * Returns the names of the output views for this unit test.
-     *
-     * @return outputViewNames
-     */
-    String[] outputs() default {};
-
-    /**
-     * The path to the directory where expected output files can be found.  The files are named
-     * based on the test method name followed by "-out.json" (e.g. testBasic-out.json).  Expected
-     * output will be written to a temporary directory on failure, so you can just copy the files
-     * from there to the expected directory if an update is needed.
-     *
-     * @return expectedOutputPath
-     */
-    String expectedOutputPath() default "";
-
-    /**
-     * Returns the names of the error views for this unit test.
-     *
-     * @return errorViewNames
-     */
-    String[] errors() default {};
-
-    /**
-     * The path to the directory where expected error output files can be found.  The files are
-     * named based on the test method name followed by "-err.json" (e.g. testBasic-err.json).
-     * Expected output will be written to a temporary directory on failure, so you can just copy
-     * the files from there to the expected directory if an update is needed.
-     *
-     * @return expectedErrorPath
-     */
-    String expectedErrorPath() default "";
-
-    /**
-     * Returns the configuration properties for this unit test.
-     *
-     * @return configPropertiesFile
-     */
-    String properties() default "";
-
-    /**
-     * Overrides for Snap properties specified by the properties file.  The value should be
-     * pairs of strings where the left-side is the JSON-Path to write and the right-side is
-     * the JSON-encoded value to store in the path.
-     *
-     * @return propertyOverrides
-     */
-    String[] propertyOverrides() default {};
-
-    /**
-     * The path to the snap property to do suggestions for.  The result of the suggestions
-     * is written to a fake output view so that you can use the expectedOutputPath mechanism
-     * to validate the results.
-     *
-     * @return suggestProperty
-     */
-    String suggestProperty() default "";
-
-    /**
-     * Returns a Supplier that will return a string that contains the properties. This is
-     * useful when the properties should be determined at runtime instead of statically.
-     * The properties setting is preferred, so if both are set only the properties value
-     * will be used.
-     *
-     * @return dynamicProperties
-     */
-    Class<? extends Supplier<String>> dynamicProperties() default DefaultSupplier.class;
-
-    /**
-     * The default for the dynamicProperties setting. If used, then the SnapExecutor will
-     * ignore.
-     */
-    final class DefaultSupplier implements Supplier<String> {
-        @Override
-        public String get() {
-            return "";
-        }
+    @TestFixture(snap = DocGenerator.class,
+            outputs = "output0",
+            properties = "data/doc_generator_properties.json")
+    public void testDocGeneratorFunctionality(TestResult testResult) throws Exception {
+        assertNull(testResult.getException());
+        OutputRecorder outputRecorder = testResult.getOutputViewByName("output0");
+        assertEquals(5, outputRecorder.getRecordedData().size());
     }
-
-    /**
-     * Empty module used as the default for injectorModule
-     */
-    final class DefaultModule implements Module {
-        @Override
-        public void configure(final Binder binder) {
-        }
-    }
-
-    /**
-     * Module that can override bindings in the default test module.
-     *
-     * @return module
-     */
-    Class<? extends Module> injectorModule() default DefaultModule.class;
-
-    /**
-     * Returns the account configuration properties for this unit test.
-     *
-     * @return accountConfigPropertiesFile
-     */
-    String accountProperties() default "";
-
-    /**
-     * Returns the env document for this unit test.
-     *
-     * @return envDocument
-     */
-    String env() default "";
-
-    /**
-     * Returns an array of data file paths. These files will be available in the
-     * {@link URLStreamHandlerFactory} factory.
-     *
-     * @return dataFiles
-     */
-    String[] dataFiles() default {};
-
-    /**
-     * If specified, an instance of this class will be created and used to supply an
-     * array of data file paths for the {@link URLStreamHandlerFactory} factory.
-     * This is an alternative to specifying the dataFiles attribute when the same set of data files
-     * is needed by multiple tests.  If both dataFiles and dataFilesSupplier are specified,
-     * dataFiles will be used.
-     */
-    Class<? extends Supplier<String[]>> dataFilesSupplier() default DefaultDataFilesSupplier.class;
-
-    /**
-     * The default for the dataFilesSupplier attribute.
-     */
-    final class DefaultDataFilesSupplier implements Supplier<String[]> {
-
-        private static final String[] NO_FILES = {};
-
-        public String[] get() {
-            return NO_FILES;
-        }
-    }
-
-    /**
-     * Returns the exception that is expected from this test fixture.
-     *
-     * @return expectedException
-     */
-    Class<? extends Exception> exception() default DefaultException.class;
-
-    /**
-     * This default exception is used to make the exception field value optional. This just a
-     * work around so that Test fixtures don't have to have exception field always.
-     */
-    final class DefaultException extends Exception {
-    }
-
-    /**
-     * Provides a custom stream handler to overwrite the behavior of
-     * {@link com.snaplogic.snap.test.harness.UrlStreamFactoryImpl}
-     *
-     * @return the class of the custom stream handler
-     */
-    Class<? extends URLStreamHandler> customStreamHandler() default URLStreamHandler.class;
-
-    boolean preservesLineage() default true;
-
-    boolean runSparkExec() default false;
 }
 ```
 
-## injectorModule
+`properties` can be used to simulate user input into a Snap's settings, including expression-enabled properties.
+
+The format of the property data file is:
+
+<div class="inline-code">
+{
+	"category" : { <em>a dict</em> },
+	"another" : { <em>a dict</em> }
+}
+</div>
+
+Example:
+
+<div class="inline-code">
+{
+	"settings" : {
+		"filename" : {
+			"value": "$someProperty",
+			"expression": true
+		},
+		"delim" : {
+			"value" : ","
+		},
+		"composition" : {
+			...
+		}
+	}
+}
+</div>
+
+`propertiesOverrides` can override the value of a Snap property specified in the `properties` file.
+
+The value should be pairs of strings where the left-side is the JSON-Path to write and the right-side is the JSON-encoded value to store in the path.
+
+Example:
+
+<div class="inline-code">
+...
+propertyOverrides = {
+	"$.settings.delim.value", ";"
+}
+...
+</div>
+
+## Injecting Test Dependencies
 
 ```java
-package com.snaplogic.snap.test.harness;
-...
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface TestFixture {
+@RunWith(SnapTestRunner.class)
+public class DocConsumerTest {
 
-	...
-	
-    /**
-     * Module that can override bindings in the default test module.
-     *
-     * @return module
-     */
-    Class<? extends Module> injectorModule() default DefaultModule.class;
+    @TestFixture(snap = DocConsumer.class)
+    public void testDocConsumerFunctionality(TestSetup testSetup) throws Exception {
+        testSetup.addInputView("input0", Arrays.<Object>asList("1", "2"));
+        
+        // This demonstrates how to inject instances/stubs/mocks into Snap fields.
+        AtomicInteger count = new AtomicInteger(0);
+        testSetup.inject().fieldName("count").dependency(count).add();
 
-	...
+        TestResult testResult = testSetup.test();
+        assertNull(testResult.getException());
+        assertEquals(2, count.get());
+    }
 }
 ```
 
-### data files, dataFilesSupplier
+The [`DocConsumer` sample Snap](#reading-documents-from-an-input-view) contains an `AtomicInteger` "count" field.
 
-```java
-package com.snaplogic.snap.test.harness;
-...
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface TestFixture {
-	
-	...
-	
-    /**
-     * Returns an array of data file paths. These files will be available in the
-     * {@link URLStreamHandlerFactory} factory.
-     *
-     * @return dataFiles
-     */
-    String[] dataFiles() default {};
+If we wish to set this field directly, we can use `inject()` from `TestSetup`.
 
-    /**
-     * If specified, an instance of this class will be created and used to supply an
-     * array of data file paths for the {@link URLStreamHandlerFactory} factory.
-     * This is an alternative to specifying the dataFiles attribute when the same set of data files
-     * is needed by multiple tests.  If both dataFiles and dataFilesSupplier are specified,
-     * dataFiles will be used.
-     */
-    Class<? extends Supplier<String[]>> dataFilesSupplier() default DefaultDataFilesSupplier.class;
-
-	...
-}
-```
+`injectorModule` allows providing a custom `AbstractModule` class to override Guice bindings and influence fields annotated with `@Inject`.
 
 # PropertyBuilder Reference
 
@@ -2766,13 +2599,13 @@ public class PropertyTypes extends SimpleSnap {
 }
 ```
 
-add10
+The `PropertyTypes` sample Snap in the [Snap Maven Archetype](#snap-maven-archetype) demonstrates a number of the various UI components available to a Snap's Settings UI.
 
 ![Property Values](http://dl.dropboxusercontent.com/u/3519578/Screenshots/qJXX.png)
 
-## SnapType Reference
+### SnapType Reference
 
-```java
+<div class="inline-code">
 NUMBER("number", BigDecimal.class),
 INTEGER("integer", BigInteger.class),
 STRING("string", String.class),
@@ -2786,4 +2619,4 @@ TABLE("array", List.class),
 ANY("any", Object.class),
 COMPOSITE("object", Map.class),
 BYTES("bytes", String.class);
-```
+</div>
