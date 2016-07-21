@@ -32,7 +32,7 @@ Snaps are streaming data processors. They can consume and/or produce Binary or D
 
 ![Snap Anatomy](http://dl.dropboxusercontent.com/u/3519578/Screenshots/iKCt.png)
 
-The have metadata that define their view settings and configuration. They can read/poll from an endpoint, batch execute or process each input individually, and may write to another endpoint.
+They have metadata that define their view settings and configuration. They can read/poll from an endpoint, batch execute or process each input individually, and may write to another endpoint.
 
 Snaps can provide design-time Suggest/lookup and Preview/validate data capabilities, or run in full execution mode.
 
