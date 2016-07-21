@@ -517,7 +517,7 @@ It is an uncomplicated Snap that generates a single document, without requiring 
 [Snap Anatomy 101](#snap-anatomy-101) explains the purpose of each annotation and the overridden methods. The comments above each annotation describe their specific usage for this Snap.
 
 <aside class="notice">
-For simplicity, the "Single Doc Generator" Snap does not permit any input views. However, for general Snap development, there should **almost always** be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
+For simplicity, the **"Single Doc Generator"** Snap does not permit any input views. However, for general Snap development, there should **almost always** be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
 </aside>
 
 ### Snap Lifecycle
@@ -618,7 +618,7 @@ For Snaps that have input views and process documents, you should preserve [data
 We recommend that you do pass through the original document for greatest flexibility.
 </aside>
 
-## Writing to an Output View
+## Writing Documents to an Output View
 
 ```java
 package com.snaplogic.snap.api;
@@ -746,7 +746,7 @@ public class DocConsumer implements Snap {
 
 The `DocConsumer` sample Snap that ships with the [Snap Archetype](#snap-maven-archetype) demonstrates how to read from a Snap's input view.
 
-Similarly to [Writing to an Output View](#writing-to-an-output-view), Guice will inject an instance of `InputViews` and assign it to the `inputViews` variable.
+Similarly to [Writing Documents to an Output View](#writing-documents-to-an-output-view), Guice will inject an instance of `InputViews` and assign it to the `inputViews` variable.
 
 `inputViews.get()` returns the default view associated with the Snap. If the Snap has more than one view, a `ViewException` is thrown.
 
@@ -760,14 +760,9 @@ The `cleanup()` method, which is called after the Snap has completed its executi
 
 <aside class="notice">
 SnapLogic's Platform will enforce that all input documents have been fully consumed, otherwise an error will occur and the pipeline will fail.
+
+<p>If some documents are consumed but "dropped on the floor" (not written to either an output or error view, or used to create another <code>Document</code>), call <code>document.acknowledge</code> to indicate it has been consumed.</p>
 </aside>
-
-## Binary Input/Output Views
-
-TK
-
-### Headers
-
 
 ## Snap Categories
 
@@ -781,14 +776,14 @@ This difference between category types manifests in three ways:
 
 ![Snap Category Difference](http://dl.dropboxusercontent.com/u/3519578/Screenshots/hEPI.png)
 
-Snap Category | Description
---------- | -----------
-**READ** | Sources of data in the pipeline.<br />*Example: File Reader*
-**WRITE** | Data destinations or sinks in the pipeline. They also inherit an "Execute during Preview" setting.<br />*Example: File Writer* 
-**PARSE** |	Parse unstructured input data into structured output data.<br />*Example: CSV Parser*
-**FORMAT** | Change data format.<br />*Example: CSV Formatter*
-**TRANSFORM** | Modify data significantly.<br />*Example: Aggregate, Join*
-**FLOW** | Change the direction or output of data in the pipeline.<br />*Example: Filter, Router*
+Icon | Snap Category | Description
+----------- | ----------- | -----------
+<img src="http://dl.dropboxusercontent.com/u/3519578/Screenshots/xzQs.png" /> | **READ** | Sources of data in the pipeline.<br />*Example: File Reader*
+<img src="http://dl.dropboxusercontent.com/u/3519578/Screenshots/QJ63.png" /> | **WRITE** | Data destinations or sinks in the pipeline. They also inherit an "Execute during Preview" setting.<br />*Example: File Writer* 
+<img src="http://dl.dropboxusercontent.com/u/3519578/Screenshots/HmYs.png" /> | **PARSE** |	Parse unstructured input data into structured output data.<br />*Example: CSV Parser*
+<img src="http://dl.dropboxusercontent.com/u/3519578/Screenshots/LNZC.png" /> | **FORMAT** | Change data format.<br />*Example: CSV Formatter*
+<img src="http://dl.dropboxusercontent.com/u/3519578/Screenshots/oETU.png" /> | **TRANSFORM** | Modify data significantly.<br />*Example: Aggregate, Join*
+<img src="http://dl.dropboxusercontent.com/u/3519578/Screenshots/NQNT.png" /> | **FLOW** | Change the direction or output of data in the pipeline.<br />*Example: Filter, Router*
 
 As you develop Snaps, choose the appropriate Snap Category for your use cases.
 
@@ -874,6 +869,138 @@ Now that we understand the basics of a Snap, we can extend the `SimpleSnap` clas
 `SimpleSnap` takes care of iterating over the incoming documents (if any) and allowing you to process each document at a time. It also handles the dependency injection for the `Input/Output/ErrorViews`, the `DocumentUtility`, and the `ExecutionUtil` (which handles iterating over the documents in the incoming input view(s) on your behalf, and writing any thrown `SnapDataException` instances to the error view).
 
 ![Two Inputs](https://dl.dropboxusercontent.com/u/3519578/Screenshots/IVTO.png)
+
+There are a number of other "Simple" Snap implementations that can help getting started quickly, including:
+
+* `SimpleReadSnap`
+* `SimpleWriteSnap`
+* `SimpleBinarySnap`
+* `SimpleBinaryReadSnap`
+* `SimpleTransformSnap`
+* `SimpleBinaryWriteSnap`
+
+## Writing Binary Data to an Output View
+
+```java
+package com.snaplogic.snaps;
+...
+@General(title = "Character Counter", purpose = "Demo writing to Binary Output View",
+        author = "Your Company Name", docLink = "http://yourdocslinkhere.com")
+@Outputs(min = 1, max = 1, offers = ViewType.BINARY)
+@Errors(min = 1, max = 1, offers = ViewType.DOCUMENT)
+@Version(snap = 1)
+public class CharacterCounter extends SimpleBinaryWriteSnap {
+
+    private static final String UTF_8 = "UTF-8";
+	...
+    @Override
+    protected void process(final Document header, final ReadableByteChannel readChannel) {
+        outputViews.write(new BinaryOutput() {
+            @Override
+            public Document getHeader() {
+            	// maintain the incoming header
+                return header;
+            }
+
+            @Override
+            public void write(WritableByteChannel writeChannel) throws IOException {
+                try (InputStream inputStream = Channels.newInputStream(readChannel)) {
+                    OutputStream outputStream = Channels.newOutputStream(writeChannel);
+
+                    // Guava Multiset
+                    Multiset<Character> bagOfChars = HashMultiset.create();
+
+                    Reader reader = new InputStreamReader(
+                            new BufferedInputStream(inputStream), UTF_8);
+
+                    // read in each character
+                    int characterRead;
+                    while ((characterRead = reader.read()) != -1) {
+                        // add the lowercase version of the character to the Multiset
+                        bagOfChars.add((char) Character.toLowerCase(characterRead));
+                    }
+
+                    try {
+                        // for each letter of English alphabet, write a line with the number of times
+                        // it appeared in the input data
+                        for (char letter = 'a'; letter <= 'z'; letter++) {
+                            String countForLetter = letter + ":" + bagOfChars.count(letter) + System.lineSeparator();
+                            IOUtils.write(countForLetter, outputStream, UTF_8);
+                        }
+                    } finally {
+                        IOUtils.closeQuietly(outputStream);
+                    }
+                }
+            }
+        });
+    }
+}
+```
+
+While JSON-based Documents offer the greatest flexibility of manipulating data within a pipeline, Binary data has advantages too. The costs associated with parsing and formatting data to JSON are avoided, and it can allow easier integration with processes running externally to the pipeline.
+
+The `CharacterCounter` sample Snap shown demonstrates writing to a binary output view. It counts the number of times each letter of the English alphabet appears in the incoming binary data, and then writes the results to the binary output view.
+
+In the sample, the `process()` method's implementation writes an anonymous `BinaryOutput` instance to the Snap's output view. 
+
+The provided `ReadableByteChannel` argument is used to create an `InputStream`. The logic for counting each occurrence of each letter then follows before the results are written to an `OutputStream`, which is sent the `write()` method's `WritableByteChannel`, and then on to the Snap's binary output view:
+
+![Character Counter Binary Output](https://dl.dropboxusercontent.com/u/3519578/Screenshots/xNKZ.png)
+
+## Reading Binary Data from an Input View
+
+```java
+package com.snaplogic.snap.api.write;
+...
+@Inputs(min = 1, max = 1, accepts = {ViewType.BINARY})
+@Outputs(min = 0, max = 0)
+@Category(snap = SnapCategory.WRITE)
+public abstract class SimpleBinaryWriteSnap extends SimpleBinarySnap {
+
+    @Inject
+    private InputViews inputViews;
+
+	// called by SimpleBinarySnap.execute()
+    @Override
+    protected void doWork() {
+        for (InputView inputView : inputViews) {
+            for (BinaryInput binaryData : inputViews.binaryInputs(inputView)) {
+                ReadableByteChannel readChannel = null;
+                try {
+                    readChannel = binaryData.getChannel();
+                    process(binaryData.getHeader(), readChannel);
+                } catch (IOException e) {
+                    throw new ExecutionException(e,
+                            EXCEPTION_WHILE_READING_FROM_BINARY_INPUT);
+                } finally {
+                    IOUtils.closeQuietly(readChannel);
+                }
+            }
+        }
+    }
+
+    /**
+     * Processes the incoming binary data.
+     */
+    protected abstract void process(Document header, ReadableByteChannel readChannel);
+}
+```
+
+The `CharacterCounter` class above extends the abstract `SimpleBinaryWriteSnap` class which, similarly to [Bootstrapping with SimpleSnap](#bootstrapping-with-simplesnap), provides some sensible default values for metadata annotations and some initial implementation.
+
+The `doWork()` method iterates over the Snap's binary input views, returning a `BinaryInput` instance for each view. The `BinaryInput` contains a `ReadableByteChannel` (which can read the bytes of the incoming binary data) and a Document header containing basic metadata (`content-type` etc.).
+
+As shown [in the `CharacterCounter` sample above](#writing-binary-data-to-an-output-view), these can then be used to create an `InputStream` or simliar to access and/or manipulate the binary data.
+
+### Headers
+
+Binary Headers are Documents used to store useful metadata about the binary data stream.
+
+When creating `BinaryOutput` instances, a Document header should be created and returned in `getHeader()`.
+
+<aside class="success">
+We recommend using standard/popular specification field names, lowercased, when possible e.g. <code>"content-type"</code> from the HTTP specification.
+</aside> 
 
 ## Accepting User Input with PropertyBuilder
 
@@ -966,7 +1093,10 @@ public class DocGenerator implements Snap {
     @Override
     public void defineProperties(PropertyBuilder propertyBuilder) {
         propertyBuilder.describe(COUNT, "Number of documents to create")
-                .type(SnapType.INTEGER).required().expression().add();
+                .type(SnapType.INTEGER)
+                .required()
+                .expression()
+                .add();
     }
 
     @Override
@@ -1638,6 +1768,8 @@ They also permit storing, encrypting, and obfuscating sensitive information like
 ## Account Configuration
 
 ```java
+package com.snaplogic.snaps;
+...
 @General(title = "Example Snap Account")
 @Version(snap = 1)
 @AccountCategory(type = AccountType.CUSTOM)
@@ -1715,9 +1847,10 @@ Unlike Snaps, you cannot <a href="#expression-enabled-properties">expression-ena
 
 ![Create Custom Account](https://dl.dropboxusercontent.com/u/3519578/Screenshots/fNOT.png)
 
-<aside class="notice">
-Don't forget to declare the new Account in the Snap POM's <code>&lt;account.classes&gt;</code> element e.g.
-<br /><code>&lt;account.classes&gt;com.snaplogic.snaps.accounts.ExampleAccount&lt;/account.classes&gt;</code>
+<aside class="success">
+Remember to declare the new Account in the Snap POM's <code>&lt;account.classes&gt;</code> element e.g.
+<br />
+<br /><code><strong>&lt;account.classes&gt;com.snaplogic.snaps.ExampleAccount&lt;/account.classes&gt;</strong></code>
 </aside>
 
 ### Encrypting and Obfuscating User Input
@@ -1734,19 +1867,83 @@ The `Account` interface also defines a `connect()` method (whose return type is 
 
 For demonstration purposes, we've chosen to implement a simple hash-token scheme for creating an authentication String to be used within a Snap to connect to some service.
 
-## Using the Account in the Snap
+## Associating Accounts with Snaps
 
 ```java
+package com.snaplogic.snaps;
+...
+@General(title = "Account Example", purpose = "Authenticates with an Account",
+        author = "Your Company Name", docLink = "http://yourdocslinkhere.com")
+@Inputs(min = 0, max = 1, accepts = {ViewType.DOCUMENT})
+@Outputs(min = 1, max = 1, offers = {ViewType.DOCUMENT})
+@Version(snap = 1)
+@Category(snap = SnapCategory.READ)
+@Accounts(provides = {ExampleAccount.class}, optional = true)
+public class SnapWithAccount extends SimpleSnap {
 
+    private static final Logger log = LoggerFactory.getLogger(SnapWithAccount.class);
+
+    private static final String USER_ID_COPY = "userIdCopy";
+
+    private String userIdCopy;
+
+    @Inject
+    private ExampleAccount snapAccount;
+
+    @Override
+    public void defineProperties(PropertyBuilder propertyBuilder) {
+        propertyBuilder.describe(USER_ID_COPY, "User ID Copy", 
+        		"Demonstrates account.userId expression variable")
+                .required()
+                .expression(SnapProperty.DecoratorType.ACCEPTS_SCHEMA)
+                .add();
+    }
+
+    @Override
+    public void configure(PropertyValues propertyValues) throws ConfigurationException {
+        userIdCopy = propertyValues.getAsExpression(USER_ID_COPY).eval(null);
+    }
+
+    @Override
+    protected void process(Document document, String s) {
+        String token = snapAccount.connect();
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("token", token);
+        data.put("userId", userIdCopy);
+
+        // do something with the token
+
+        outputViews.write(documentUtility.newDocumentFor(document, data));
+    }
+}
 ```
 
-### Exposing the Account properties in the Snap
+The `@Accounts` metadata annotation is used to declare what Accounts are supported by the Snap. The `provides` argument value lists the supported Account classes, and the `optional` argument instructs the Designer whether to prompt for an Account as soon the Snap is dragged onto the canvas.
 
-To begin with, you may wish to expose the properties of the Account in the Settings of the Snap to which the Account has been associated with.
+The `ExampleAccount` instance bound to the "Example Account" Account created earlier can then be injected into the Snap and used, for example, in the `execute()`/`process()` method to `connect()` to a target service provider or to generate an authentication token etc.
 
-To do this, have the Account implement the `AccountVariableProvider` interface and its `getAccountVariableValue()` method e.g.
+<aside class="success">
+Remember to declare the new Snap in the Snap POM's <code>&lt;snap.classes&gt;</code> element e.g.
+<br />
+<br />
+<code>&lt;snap.classes&gt;
+<br />&nbsp;&nbsp;com.snaplogic.snaps.DocConsumer,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.DocGenerator,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.PropertyTypes,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.SchemaExample,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.SingleDocGenerator,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.Suggest,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.TwoInputs,
+<br />&nbsp;&nbsp;com.snaplogic.snaps.TwoInputsTwoOutputs,
+<br />&nbsp;&nbsp;<strong>com.snaplogic.snaps.SnapWithAccount</strong>
+<br />&lt;/snap.classes&gt;
+</code>
+</aside>
 
-<div class="inline-code>
+## Exposing Account Properties
+
+```java
 @General(title = "Example Snap Account")
 @Version(snap = 1)
 @AccountCategory(type = AccountType.CUSTOM)
@@ -1767,17 +1964,25 @@ public class ExampleAccount implements Account<String>, AccountVariableProvider 
         };
     }
 }
-</div>
+```
 
-The `$account.userId` and `$account.passphrase` expression values can then be used within the Snap's expression-enabled properties.
+The `SnapWithAccount` sample also demonstrates another Snap/Account integration by exposing property values of the associated `Account` instance in the Settings of the Snap.
 
+To do this, have the Account implement the `AccountVariableProvider` interface and its `getAccountVariableValue()` method, and store the  e.g.
 
+The `account.userId` and `account.passphrase` expression variables can then be used within the Snap's expression-enabled properties:
+
+![Account Expression Variable](https://dl.dropboxusercontent.com/u/3519578/Screenshots/yF6t.png)
+
+<aside class="notice">
+Do not prefix the <code>account</code> expression variable with <code>$</code> as it is not in the document. It also has the limitation that it is not listed within the expression UI's "Functions and properites" dropdown/tree.
+</aside>
 
 ### Account Types
 
-In the `ExampleAccount` sample provided, the Account has been marked with the `@AccountCategory` annotation, whose `type` argument value is `AccountType.CUSTOM`    /**
+In the `ExampleAccount` sample provided, the Account has been marked with the `@AccountCategory` annotation, whose `type` argument value is `AccountType.CUSTOM`.
 
-The list of provided Account Types are:
+The list of provided Account Category Types are:
 
 * `NONE`
 * `CUSTOM`
@@ -1790,15 +1995,153 @@ The list of provided Account Types are:
 * `AWS_S3`
 * `SAP`
 
-## Validation
+## Validating Accounts
 
-ValidatableAccount
+```java
+package com.snaplogic.account.api;
 
-ExtendedValidatableAccount
+/**
+ * A marker interface for the accounts that can be validated
+ *
+ * @param <T> as the return type for {@link #connect}
+ */
+public interface ValidatableAccount<T> extends Account<T> {
+}
+```
 
-## Multiple Accounts
+Implementing the marker interface `ValidatableAccount`, which extends `Account`, will add a **"Validate"** button to the Account Settings's UI. 
 
-MultiAccountBinding
+<div class="inline-code">
+public class ExampleAccount implements <strong>ValidatableAccount&lt;String&gt;</strong>, AccountVariableProvider {
+...
+}
+</div>
+
+When clicked, this will trigger a call to the Account's `connect()` method. If the `connect()` method returns successfully (an exception is not thrown), the Account will be deemed validated:
+
+![Successful Account Validation](https://dl.dropboxusercontent.com/u/3519578/Screenshots/KsZR.png)
+
+## Validation-specific Behavior
+
+```java
+package com.snaplogic.account.api;
+...
+/**
+ * A marker interface for the accounts that can be validated.
+ * This interface can be implemented when connect() method is not sufficient to validate the
+ * account.
+ *
+ * @param <T> as a return type for {@link #validate}
+ * @param <R> as an argument for {@link #validate}
+ */
+public interface ExtendedValidatableAccount<T, R> extends ValidatableAccount<T> {
+    /**
+     * Validates the account. Please note that connect() should not be called by this validator.
+     * If needed, one needs to call connect() separately.
+     *
+     * @param arg - argument needed to validate the account
+     *
+     * @return an optional value that might be needed to access the session
+     * @throws ExecutionException
+     */
+    T validate(R arg);
+}
+```
+
+Implementing `ExtendedValidatableAccount`, which extends `ValidatableAccount`, will also add a **"Validate"** button to the Account Settings's UI. 
+
+However, it will instead trigger a call to `Account.validate()`, rather than `connect()`, when the **"Validate"** button in the Account Settings' UI is clicked. A separate Generic Type is required for the return type of the `validate()` method.
+
+<div class="inline-code">
+public class ExampleAccount implements ExtendedValidatableAccount&lt;String, String&gt;, AccountVariableProvider {
+	...
+	@Override
+	public String validate(String arg) {
+		// some validation-specific actions
+	}
+}
+</div>
+
+This is useful when an Account can be validated in a different manner versus connecting the Account during Snap execution.
+
+## Supporting Multiple Accounts
+
+```java
+package com.snaplogic.account.api.capabilities;
+...
+/**
+ * Provides a module that binds an instance of the account to the
+ * {@link com.snaplogic.account.api.Account} interface.
+ *
+ * <p>This can be used when a snap class defines multiple accounts via the @Accounts annotations.
+ * One of the accounts will then be injected into the Snap class, depending on the choice the
+ * user made for the Snap. The returned module must then bind the {@link com.snaplogic.account
+ * .api.Account} interface to the instance.</p>
+ *
+ * <p>As an example:
+ * <code>bind(Key.get(new TypeLiteral<Account<String>>() {})).toInstance(account)</code> will
+ * bind the instance to the Account of type String.</p>
+ *
+ * @param <T> as the type of the account
+ */
+public interface MultiAccountBinding<T> {
+
+    /**
+     * Returns the module for the account binding.
+     *
+     * @param account as the account instance
+     * @return the module used for injecting the instance into the snap class
+     */
+    public Module getManagedAccountModule(T account);
+}
+```
+
+The `@Accounts` annotation allows multiple Account classes to be registered to the `provides` argument.
+
+The `MultiAccountBinding` interface possesses a `getManagedAccountModule()` method that returns a [Guice `Module`](https://google.github.io/guice/api-docs/latest/javadoc/index.html?com/google/inject/Module.html).
+
+Implementations of this method can then return an [`AbstractModule`](https://google.github.io/guice/api-docs/latest/javadoc/index.html?com/google/inject/AbstractModule.html) instance which binds the `Account<String>` type literal [to the instance](https://github.com/google/guice/wiki/InstanceBindings) of the `Account` registered with the Snap.
+
+Then, when it is time for the `Account<String>` instance to be injected, Guice will use the instance bound to above and assign it to the `snapAccount` instance variable:
+
+<div class="inline-code">
+...
+@Accounts(provides = {ExampleAccount.class, AnotherAccount.class})
+public class SnapWithAccount extends SimpleSnap implements MultiAccountBinding&lt;Account&lt;String&gt;&gt; {
+
+	/*
+	Step #2: Guice will inject the Account instance that was bound below.
+	 */
+    @Inject
+    private Account&lt;String&gt; snapAccount;
+    
+    /*
+	Step #1: the Account type (with String generic type) is 
+	bound to the Account instance registered with the Snap.
+	 */
+	@Override
+    public Module getManagedAccountModule(final Account&lt;String&gt; account) {
+        return new AbstractModule() {
+            @Override
+            protected void configure() {
+                bind(Key.get(new TypeLiteral&lt;Account&lt;String&gt;&gt;() {})).toInstance(account);
+            }
+        };
+    }
+
+	...
+	
+	/*
+	Step 3: by the time it gets here, snapAccount will have been bound to the Account 
+	instance in the Account Registry for this Snap.
+	 */
+    @Override
+    protected void process(Document document, String s) {
+        String token = snapAccount.connect();
+        ...
+    }
+}
+</div>
 
 # jtest: Snap Unit Testing Framework
 
