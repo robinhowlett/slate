@@ -517,7 +517,7 @@ It is an uncomplicated Snap that generates a single document, without requiring 
 [Snap Anatomy 101](#snap-anatomy-101) explains the purpose of each annotation and the overridden methods. The comments above each annotation describe their specific usage for this Snap.
 
 <aside class="notice">
-For simplicity, the <strong>"Single Doc Generator"</strong> Snap does not permit any input views. However, for general Snap development, there should <strong>almost always<strong> be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
+For simplicity, the <strong>"Single Doc Generator"</strong> Snap does not permit any input views. However, for general Snap development, there should <strong>almost always</strong> be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
 </aside>
 
 ### Snap Lifecycle
