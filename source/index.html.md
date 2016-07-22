@@ -243,11 +243,11 @@ At its most basic, a Snap class declares the required name, view, version and ca
 
 ### Snap interface
 
-The `com.snaplogic.api.Snap` interface that should be implemented by the Snap developers to convert their business logic into entity that can be used inside SnapLogic Pipelines.
+The `com.snaplogic.api.Snap` interface that should be implemented by the Snap developers to convert their business logic into an entity that can be used inside SnapLogic Pipelines.
  
 **`defineProperties`**
 
-Defines the Snap properties using the given `PropertyBuilder`. This method is called during the `compile` phase and generates the `settings` Snap schema property that the SnapLogic Designer uses to build the user interface.
+Defines the Snap properties using the given `PropertyBuilder`. This method is called during [the `compile` phase](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html#Build_Lifecycle_Basics) and generates the `settings` Snap schema property that the SnapLogic Designer uses to build the user interface.
 
 **`configure`**
 
@@ -389,13 +389,13 @@ Once `SnapArchetype` has been generated, it can be imported as a Maven project i
 
 > ![Project Structure](https://dl.dropboxusercontent.com/u/3519578/Screenshots/uzoL.png)
 
+A Snap Project's structure follows [Maven's Standard Directory Layout](https://maven.apache.org/guides/introduction/introduction-to-the-standard-directory-layout.html).
+
 ### `src/main/assembly`
 
 `final.xml` and `snap.xml` are used by the `maven-assembly-plugin` to build the Snap Pack zip file that can be uploaded to the SnapLogic Manager. You should not need to alter these files.
 
 ### `src/main/config`
-
-**directives**
 
 `directives` contains basic Snap Pack metadata. 
 
@@ -517,7 +517,7 @@ It is an uncomplicated Snap that generates a single document, without requiring 
 [Snap Anatomy 101](#snap-anatomy-101) explains the purpose of each annotation and the overridden methods. The comments above each annotation describe their specific usage for this Snap.
 
 <aside class="notice">
-For simplicity, the **"Single Doc Generator"** Snap does not permit any input views. However, for general Snap development, there should **almost always** be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
+For simplicity, the <strong>"Single Doc Generator"</strong> Snap does not permit any input views. However, for general Snap development, there should <strong>almost always<strong> be an input view. See <a href="#reading-documents-from-an-input-view">Reading Documents from an Input View</a> for more.
 </aside>
 
 ### Snap Lifecycle
@@ -532,7 +532,7 @@ Next, the `execute` method is called. This is where the majority of the Snap's b
 
 Finally, the `cleanup` method is called to clean-up any resources used.
 
-Due to no user input being required, nor clean-up needed, the `defineProperties`, `configure()`, and `cleanup` methods have no implementation for this Snap. 
+Due to no user input being required, nor clean-up needed, the `defineProperties`, `configure`, and `cleanup` methods have no implementation for this Snap. 
 
 The `execute` method increments an `int` member variable, logs a debug statement, creates data, and generates a new Document with this data to be subsequently written to the output view.
 
@@ -553,7 +553,7 @@ $ lnav ~/opt/snaplogic/run/log/jcc.json
   xid: a83bcfdd-2bc7-480e-bf1e-5fbdfef3c726   
 ```
 
-In ([the "Single Doc Generator" sample Snap](#basic-snap-implementation)) above, an SLF4J `Logger` static class variable is declared and initialized and is used to write debug messages to the Snaplex/JCC's log.
+In [the "Single Doc Generator" sample Snap](#basic-snap-implementation) above, an SLF4J `Logger` static class variable is declared and initialized and is used to write debug messages to the Snaplex/JCC's log.
 
 For example, when previewing or executing the "Single Doc Generator" Snap in the Designer, the value of the `counter` variable is written to the log. 
 
@@ -760,8 +760,8 @@ The `cleanup()` method, which is called after the Snap has completed its executi
 
 <aside class="notice">
 SnapLogic's Platform will enforce that all input documents have been fully consumed, otherwise an error will occur and the pipeline will fail.
-
-<p>If some documents are consumed but "dropped on the floor" (not written to either an output or error view, or used to create another <code>Document</code>), call <code>document.acknowledge</code> to indicate it has been consumed.</p>
+<br />
+<br />If some documents are consumed but "dropped on the floor" (not written to either an output or error view, or used to create another <code>Document</code>), call <code>document.acknowledge</code> to indicate it has been consumed.
 </aside>
 
 ## Snap Categories
@@ -771,7 +771,7 @@ The [Doc Consumer Snap's](#reading-documents-from-an-input-view) category (`Snap
 This difference between category types manifests in three ways:
 
 * the color and icon of the Snaps are different,
-* the "Doc Consumer" Snap inherits an "Execute During Preview" setting to toggle whether the Snap will execute when the Pipeline is validating/previewing,
+* the "Doc Consumer" Snap inherits an "Execute during Preview" setting to toggle whether the Snap will execute when the Pipeline is validating/previewing,
 * the Snaps are separated when "Group By Type" is chosen.
 
 ![Snap Category Difference](http://dl.dropboxusercontent.com/u/3519578/Screenshots/hEPI.png)
@@ -794,8 +794,12 @@ As you develop Snaps, choose the appropriate Snap Category for your use cases.
  * This Snap accepts two inputs and outputs to a single output. To use it, feed
  * it at least one document in each view. It will output a single stream which consists
  * of the combination of the two inputs.
- *
- * @author <you>
+ * 
+ * This Snap extends {@link SimpleSnap} (instead of implementing {@link Snap}).
+ * This means that instead of having a method called 'execute' which is called once,
+ * it has a method called 'process' which is called for every document the Snap receives.
+ * This means you do not have to iterate over incoming documents as 'process' does that
+ * for you.
  */
 @General(title = "Two Inputs", purpose = "Accepts two inputs, merges them",
         author = "Your Company Name" docLink = "http://yourdocslinkhere.com")
@@ -804,13 +808,6 @@ As you develop Snaps, choose the appropriate Snap Category for your use cases.
 @Errors(min = 0, max = 1, offers = {ViewType.DOCUMENT})
 @Version(snap = 1)
 @Category(snap = SnapCategory.READ)
-/*
- * This Snap extends {@link SimpleSnap} (instead of implementing {@link Snap}).
- * This means that instead of having a method called 'execute' which is called once,
- * it has a method called 'process' which is called for every document the Snap receives.
- * This means you do not have to iterate over incoming documents as 'process' does that
- * for you.
- */
 public class TwoInputs extends SimpleSnap {
 
     private static final Logger log = LoggerFactory.getLogger(TwoInputs.class);
@@ -990,7 +987,7 @@ The `CharacterCounter` class above extends the abstract `SimpleBinaryWriteSnap` 
 
 The `doWork()` method iterates over the Snap's binary input views, returning a `BinaryInput` instance for each view. The `BinaryInput` contains a `ReadableByteChannel` (which can read the bytes of the incoming binary data) and a Document header containing basic metadata (`content-type` etc.).
 
-As shown [in the `CharacterCounter` sample above](#writing-binary-data-to-an-output-view), these can then be used to create an `InputStream` or simliar to access and/or manipulate the binary data.
+As shown [in the **"Character Counter"** sample above](#writing-binary-data-to-an-output-view), these can then be used to create an `InputStream` or simliar to access and/or manipulate the binary data.
 
 ### Headers
 
@@ -999,7 +996,7 @@ Binary Headers are Documents used to store useful metadata about the binary data
 When creating `BinaryOutput` instances, a Document header should be created and returned in `getHeader()`.
 
 <aside class="success">
-We recommend using standard/popular specification field names, lowercased, when possible e.g. <code>"content-type"</code> from the HTTP specification.
+We recommend using standard/popular specification field names, lowercased, when possible e.g. <code>"content-type"</code>, from the HTTP specification.
 </aside> 
 
 ## Accepting User Input with PropertyBuilder
@@ -1143,8 +1140,6 @@ To demonstrate this new capability, we can use a "count" [Pipeline Property](htt
  * This Snap has one output and writes one document that contains the suggested
  * value. This Snap demonstrates the suggest value functionality that uses the
  * partial configuration information to suggest a property value.
- *
- * @author <you>
  */
 @General(title = "Suggest", purpose = "Demo suggest functionality.",
         author = "Your Company Name", docLink = "http://yourdocslinkhere.com")
@@ -1556,8 +1551,6 @@ SnapLogic recommends always enabling a Document error view:
  *
  * It will output two streams, one for only males and another for females. 
  * Unknowns will get sent to both.
- *
- * @author <you>
  */
 @General(title = "Two Ins/Outs", purpose = "Accepts two inputs, sends to two outputs.",
         author = "Your Company Name", docLink = "http://yourdocslinkhere.com")
