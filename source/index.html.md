@@ -40,7 +40,7 @@ Snaps can provide design-time Suggest/lookup and Preview/validate data capabilit
 
 ## Snaps vs Scripts
 
-SnapLogic's [Script Snap](http://doc.snaplogic.com/com-snaplogic-snaps-script-script_2) executes a Javascript, Jython, or JRuby script using the JVM `ScriptEngine` mechanism. 
+SnapLogic's [Script Snap](http://doc.snaplogic.com/com-snaplogic-snaps-script-script_2) executes a JavaScript, Jython, or JRuby script using the JVM `ScriptEngine` mechanism. 
 
 Consider the following when deciding whether to develop a custom Snap vs using the Script Snap:
 
@@ -178,7 +178,7 @@ $ java -jar jcc.war jcc
 ```
 The simplest way to start the Snaplex is to run the packaged `jcc.war` file.
 
-To check if the Snaplex started correctly, login to the [SnapLogic Dashboard](https://elastic.snaplogic.com/sl/dashboard.html):
+To check if the Snaplex started correctly, log in to the [SnapLogic Dashboard](https://elastic.snaplogic.com/sl/dashboard.html):
 
 ![SnapLogic Dashboard Snaplex Health](http://dl.dropboxusercontent.com/u/3519578/Screenshots/1Z0t.png)
 
@@ -238,8 +238,8 @@ At its most basic, a Snap class declares the required name, view, version and ca
 * `@Inputs`: specifies the minimum and maximum number of Input Views and the type of input they accept (JSON Documents or Binary data).
 * `@Outputs`: specifies the minimum and maximum number of Output Views and the type of output they produce (JSON Documents or Binary data).
 * `@Errors`: specifies whether an Error Views should be written to
-* `@Version`: version number for the Snap (not to be confused with its build number).
-* `@Category`: categorizes the Snap and determines the icon/color of the Snap within the SnapLogic Designer.
+* `@Version`: version number for the Snap (not to be confused with the Snap Pack version).
+* `@Category`: [categorizes the Snap](#snap-categories) and determines the icon/color of the Snap within the SnapLogic Designer.
 
 ### Snap interface
 
